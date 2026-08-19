@@ -4,6 +4,17 @@ import ReusableTable from '../ReusableTable';
 import { formatCurrency } from '../../utils/exportUtils';
 
 const CustomerTable = ({ customers, onView, onEdit }) => {
+  const getRowStyle = (row) => {
+    const isSub = row.isSubscriber === true || (row.isSubscriber !== false && Number(row.insuranceAmount || 0) >= 20);
+    if (isSub) {
+      return {
+        borderLeftColor: '#f59e0b',
+        backgroundColor: 'rgba(245, 158, 11, 0.04)',
+      };
+    }
+    return {};
+  };
+
   const columns = [
     { header: 'Customer ID', accessor: 'displayId' },
     {
@@ -12,11 +23,12 @@ const CustomerTable = ({ customers, onView, onEdit }) => {
       cell: (row) => {
         const isSub = row.isSubscriber === true || (row.isSubscriber !== false && Number(row.insuranceAmount || 0) >= 20);
         return (
-          <div className="flex items-center gap-1.5">
-            <span className="font-semibold text-primary">{row.name}</span>
+          <div className="flex items-center gap-2">
+            <span className={`font-semibold ${isSub ? 'text-amber-500 font-bold' : 'text-primary'}`}>{row.name}</span>
             {isSub && (
-              <span className="text-amber-400 text-lg leading-none select-none drop-shadow" title="Subscriber">
-                ⭐
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-500 border border-amber-500/25 select-none" title="Subscriber">
+                <span>⭐</span>
+                <span>Subscriber</span>
               </span>
             )}
           </div>
@@ -57,7 +69,7 @@ const CustomerTable = ({ customers, onView, onEdit }) => {
     },
   ];
 
-  return <ReusableTable columns={columns} data={customers} onRowClick={onView} />;
+  return <ReusableTable columns={columns} data={customers} getRowStyle={getRowStyle} onRowClick={onView} />;
 };
 
 export default CustomerTable;

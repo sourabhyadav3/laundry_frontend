@@ -269,6 +269,13 @@ const Invoices = () => {
   };
 
   const getRowStyle = (row) => {
+    const isEdited = row.isEdited || row.editedAt || (row.timeline && Array.isArray(row.timeline) && row.timeline.some(t => /edit/i.test(t.comment || '')));
+    if (isEdited) {
+      return {
+        backgroundColor: 'rgba(239, 68, 68, 0.12)',
+        borderLeftColor: '#ef4444',
+      };
+    }
     if (!row.itemDetails || row.itemDetails.length === 0) return {};
     const firstItem = row.itemDetails[0];
     const catalogItem = catalog?.find(
@@ -285,10 +292,44 @@ const Invoices = () => {
   };
 
   const tableColumns = [
-    { header: 'Invoice #', accessor: 'number' },
+    {
+      header: 'Invoice #',
+      accessor: 'number',
+      cell: (row) => {
+        const isEdited = row.isEdited || row.editedAt || (row.timeline && Array.isArray(row.timeline) && row.timeline.some(t => /edit/i.test(t.comment || '')));
+        return (
+          <div className="flex items-center gap-1.5 font-bold font-mono">
+            <span className="text-primary">{row.number}</span>
+            {isEdited && (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-red-500/15 text-red-600 border border-red-500/25" title="Edited Invoice">
+                <span>✏️</span>
+                <span>Edited</span>
+              </span>
+            )}
+          </div>
+        );
+      }
+    },
     { header: 'Customer', accessor: 'customerName' },
     { header: 'Branch', accessor: 'branchId', cell: (row) => getBranchName(row.branchId || row.branch) },
-    { header: 'Service', accessor: 'serviceType' },
+    {
+      header: 'Service',
+      accessor: 'serviceType',
+      cell: (row) => {
+        const serviceName = row.serviceType || row.service;
+        if (!serviceName) return <span className="text-secondary">—</span>;
+        const isExpress = /express|urgent|مستعجل/i.test(String(serviceName));
+        if (isExpress) {
+          return (
+            <span className="inline-flex items-center gap-1 bg-red-600 text-white font-bold px-2.5 py-0.5 rounded-md text-xs shadow-sm whitespace-nowrap">
+              <span>⚡</span>
+              <span>{serviceName}</span>
+            </span>
+          );
+        }
+        return <span className="font-medium text-primary whitespace-nowrap">{serviceName}</span>;
+      }
+    },
     {
       header: 'Items',
       accessor: 'itemDetails',
@@ -879,15 +920,15 @@ const Invoices = () => {
 
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      { method: t('counter.makeInvoice.paymentCash'), icon: '💵', bg: 'linear-gradient(135deg,#059669,#10b981)', shadow: 'rgba(16,185,129,0.4)', step: null, payMethod: 'Cash' },
-                      { method: t('counter.makeInvoice.paymentCard'), icon: '💳', bg: 'linear-gradient(135deg,#3b82f6,#4f46e5)', shadow: 'rgba(59,130,246,0.4)', step: 'card', payMethod: 'Card' },
-                      { method: t('counter.makeInvoice.paymentLink'), icon: '🔗', bg: 'linear-gradient(135deg,#f59e0b,#d97706)', shadow: 'rgba(245,158,11,0.4)', step: 'link', payMethod: 'Link' },
-                      { method: t('counter.makeInvoice.paymentCredit'), icon: '💰', bg: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', shadow: 'rgba(139,92,246,0.4)', step: 'wamt', payMethod: 'Credit' },
-                    ].map(({ method, icon, bg, shadow, step, payMethod }) => (
+                      { method: t('counter.makeInvoice.paymentCash') || 'CASH', icon: '💵', bg: 'linear-gradient(135deg,#059669,#10b981)', shadow: 'rgba(16,185,129,0.4)', payMethod: 'Cash' },
+                      { method: t('counter.makeInvoice.paymentBukey') || 'BUKEY', icon: '🎟️', bg: 'linear-gradient(135deg,#3b82f6,#4f46e5)', shadow: 'rgba(59,130,246,0.4)', payMethod: 'Bukey' },
+                      { method: t('counter.makeInvoice.paymentKnet') || 'K-NET', icon: '💳', bg: 'linear-gradient(135deg,#f59e0b,#d97706)', shadow: 'rgba(245,158,11,0.4)', payMethod: 'K-Net' },
+                      { method: t('counter.makeInvoice.paymentCredit') || 'CREDIT', icon: '💰', bg: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', shadow: 'rgba(139,92,246,0.4)', payMethod: 'Credit' },
+                    ].map(({ method, icon, bg, shadow, payMethod }) => (
                       <button
                         key={payMethod}
                         type="button"
-                        onClick={() => step ? setPaymentStep(step) : handleSettleAndPay(payMethod)}
+                        onClick={() => handleSettleAndPay(payMethod)}
                         className="relative flex flex-col items-center justify-center p-4 rounded-2xl text-white transition-all hover:-translate-y-1 active:scale-95 group overflow-hidden"
                         style={{ background: bg, boxShadow: `0 8px 20px -5px ${shadow}` }}
                       >

@@ -1909,23 +1909,23 @@ const MakeInvoice = () => {
 
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                  { method: t('counter.makeInvoice.paymentCash'), icon: '💵', bg: 'linear-gradient(135deg,#059669,#10b981)', shadow: 'rgba(16,185,129,0.4)', step: null, payMethod: 'Cash' },
-                  { method: t('counter.makeInvoice.paymentCard'), icon: '💳', bg: 'linear-gradient(135deg,#3b82f6,#4f46e5)', shadow: 'rgba(59,130,246,0.4)', step: 'card', payMethod: 'Card' },
-                  { method: t('counter.makeInvoice.paymentLink'), icon: '🔗', bg: 'linear-gradient(135deg,#f59e0b,#d97706)', shadow: 'rgba(245,158,11,0.4)', step: 'link', payMethod: 'Link' },
-                  { method: t('counter.makeInvoice.paymentCredit'), icon: '💰', bg: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', shadow: 'rgba(139,92,246,0.4)', step: 'wamt', payMethod: 'Credit' },
-                ].map(({ method, icon, bg, shadow, step, payMethod }) => (
-                  <button
-                    key={payMethod}
-                    type="button"
-                    onClick={() => step ? setPaymentStep(step) : handleSettleAndPay(payMethod)}
-                    className="flex flex-col items-center justify-center gap-2.5 py-5 rounded-2xl text-white font-bold transition-all duration-200 hover:scale-[1.02] active:scale-95"
-                    style={{ background: bg, boxShadow: `0 6px 18px ${shadow}` }}
-                  >
-                    <span className="text-3xl">{icon}</span>
-                    <span className="text-xs tracking-widest uppercase">{method}</span>
-                  </button>
-                ))}
-              </div>
+                    { method: t('counter.makeInvoice.paymentCash') || 'CASH', icon: '💵', bg: 'linear-gradient(135deg,#059669,#10b981)', shadow: 'rgba(16,185,129,0.4)', payMethod: 'Cash' },
+                    { method: t('counter.makeInvoice.paymentBukey') || 'BUKEY', icon: '🎟️', bg: 'linear-gradient(135deg,#3b82f6,#4f46e5)', shadow: 'rgba(59,130,246,0.4)', payMethod: 'Bukey' },
+                    { method: t('counter.makeInvoice.paymentKnet') || 'K-NET', icon: '💳', bg: 'linear-gradient(135deg,#f59e0b,#d97706)', shadow: 'rgba(245,158,11,0.4)', payMethod: 'K-Net' },
+                    { method: t('counter.makeInvoice.paymentCredit') || 'CREDIT', icon: '💰', bg: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', shadow: 'rgba(139,92,246,0.4)', payMethod: 'Credit' },
+                  ].map(({ method, icon, bg, shadow, payMethod }) => (
+                    <button
+                      key={payMethod}
+                      type="button"
+                      onClick={() => handleSettleAndPay(payMethod)}
+                      className="flex flex-col items-center justify-center gap-2.5 py-5 rounded-2xl text-white font-bold transition-all duration-200 hover:scale-[1.02] active:scale-95"
+                      style={{ background: bg, boxShadow: `0 6px 18px ${shadow}` }}
+                    >
+                      <span className="text-3xl">{icon}</span>
+                      <span className="text-xs tracking-widest uppercase">{method}</span>
+                    </button>
+                  ))}
+                </div>
               <button
                   type="button"
                   onClick={() => handleSettleAndPayDirectUnpaidWithoutPrint()}

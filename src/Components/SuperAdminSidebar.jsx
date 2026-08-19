@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { FiMenu, FiX, FiHome, FiUsers, FiBarChart2, FiSettings, FiMapPin, FiTool, FiActivity } from 'react-icons/fi';
+import { FiMenu, FiX, FiHome, FiUsers, FiDollarSign, FiBarChart2, FiSettings, FiMapPin, FiTool, FiActivity } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { FiLogOut } from 'react-icons/fi';
 import { toast } from 'react-toastify';
@@ -11,6 +11,7 @@ const menuItems = [
   { label: 'User & Role Management', icon: <FiUsers />,   to: '/superadmin/users' },
   { label: 'Branches',              icon: <FiMapPin />,  to: '/superadmin/branches' },
   { label: 'Laundry Services',      icon: <FiTool />,    to: '/superadmin/services' },
+  { label: 'Expenses',              icon: <FiDollarSign />, to: '/superadmin/expenses' },
   { label: 'Audit Logs',            icon: <FiActivity />, to: '/superadmin/audit-logs' },
   { label: 'Reports',               icon: <FiBarChart2 />, to: '/superadmin/reports' },
   { label: 'Settings',              icon: <FiSettings />, to: '/superadmin/settings' },

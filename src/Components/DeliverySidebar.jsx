@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiHome, FiPackage, FiTruck, FiCheckCircle, FiPlusCircle, FiList, FiUsers, FiMapPin, FiSettings, FiFileText } from 'react-icons/fi';
+import { FiHome, FiPackage, FiTruck, FiCheckCircle, FiPlusCircle, FiList, FiUsers, FiMapPin, FiSettings, FiFileText, FiDollarSign } from 'react-icons/fi';
 import RoleSidebar from './RoleSidebar';
 
 const menuItems = [
@@ -8,6 +8,7 @@ const menuItems = [
   { label: 'Make Invoice', icon: <FiPlusCircle />, to: '/delivery/make-invoice', permission: 'make_invoice' },
   { label: 'Change invoice status', icon: <FiList />, to: '/delivery/orders', permission: 'view_orders' },
   { label: 'Invoices', icon: <FiFileText />, to: '/delivery/invoices', permission: 'view_invoice_status' },
+  { label: 'Expenses', icon: <FiDollarSign />, to: '/delivery/expenses', permission: 'view_logistics' },
   { label: 'Home Service', icon: <FiTruck />, to: '/delivery/pickups', permission: 'view_pickups' },
   { label: 'Assigned Deliveries', icon: <FiPackage />, to: '/delivery/deliveries', permission: 'view_deliveries' },
   { label: 'Completed Jobs', icon: <FiCheckCircle />, to: '/delivery/completed', permission: 'view_completed_jobs' },

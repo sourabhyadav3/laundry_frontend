@@ -15,6 +15,13 @@ const OrderTable = ({ orders, onView, onUpdateStatus, selectedOrderIds, setSelec
   };
 
   const getRowStyle = (row) => {
+    const isEdited = row.isEdited || row.editedAt || (row.timeline && Array.isArray(row.timeline) && row.timeline.some(t => /edit/i.test(t.comment || '')));
+    if (isEdited) {
+      return {
+        backgroundColor: 'rgba(239, 68, 68, 0.12)',
+        borderLeftColor: '#ef4444',
+      };
+    }
     if (!row.itemDetails || row.itemDetails.length === 0) return {};
     const firstItem = row.itemDetails[0];
     const catalogItem = catalog?.find(
@@ -62,10 +69,44 @@ const OrderTable = ({ orders, onView, onUpdateStatus, selectedOrderIds, setSelec
         />
       )
     }] : []),
-    { header: 'Order Number', accessor: 'number' },
+    {
+      header: 'Order Number',
+      accessor: 'number',
+      cell: (row) => {
+        const isEdited = row.isEdited || row.editedAt || (row.timeline && Array.isArray(row.timeline) && row.timeline.some(t => /edit/i.test(t.comment || '')));
+        return (
+          <div className="flex items-center gap-1.5 font-bold font-mono">
+            <span className="text-primary">{row.number}</span>
+            {isEdited && (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-red-500/15 text-red-600 border border-red-500/25" title="Edited Order">
+                <span>✏️</span>
+                <span>Edited</span>
+              </span>
+            )}
+          </div>
+        );
+      }
+    },
     { header: 'Customer', accessor: 'customerName' },
     { header: 'Branch', accessor: 'branchId', cell: (row) => getBranchName(row.branchId || row.branch) },
-    { header: 'Service', accessor: 'serviceType' },
+    {
+      header: 'Service',
+      accessor: 'serviceType',
+      cell: (row) => {
+        const serviceName = row.serviceType || row.service;
+        if (!serviceName) return <span className="text-secondary">—</span>;
+        const isExpress = /express|urgent|مستعجل/i.test(String(serviceName));
+        if (isExpress) {
+          return (
+            <span className="inline-flex items-center gap-1 bg-red-600 text-white font-bold px-2.5 py-0.5 rounded-md text-xs shadow-sm whitespace-nowrap">
+              <span>⚡</span>
+              <span>{serviceName}</span>
+            </span>
+          );
+        }
+        return <span className="font-medium text-primary whitespace-nowrap">{serviceName}</span>;
+      }
+    },
     {
       header: 'Delivery Type',
       accessor: 'deliveryType',

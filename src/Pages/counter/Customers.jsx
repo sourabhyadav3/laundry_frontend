@@ -1,5 +1,5 @@
 import React, { useContext, useMemo, useState } from 'react';
-import { FiSearch, FiPlus } from 'react-icons/fi';
+import { FiSearch, FiPlus, FiChevronDown } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { AdminStateContext } from '../../context/AdminStateContext';
 import CustomerTable from '../../Components/counter/CustomerTable';
@@ -9,6 +9,7 @@ import { formatCurrency, formatDate, generateSubscriptionReceiptPDF, generateCus
 const Customers = () => {
   const { customers, orders = [], addCustomer, updateCustomer, selectedBranch, areas } = useContext(AdminStateContext);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showFormModal, setShowFormModal] = useState(false);
@@ -31,15 +32,30 @@ const Customers = () => {
       return sorted.filter(
         (c) => {
           const matchesBranch = !selectedBranch || selectedBranch === 'All' || String(c.branchId) === String(selectedBranch) || String(c.branch) === String(selectedBranch);
-          return matchesBranch && (
+          const matchesSearch =
             c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             c.phone.includes(searchTerm) ||
-            String(c.displayId || c.id).includes(searchTerm)
-          );
+            String(c.displayId || c.id).includes(searchTerm);
+
+          const status = c.status || 'Active';
+          const isSub = c.isSubscriber === true || (c.isSubscriber !== false && Number(c.insuranceAmount || 0) >= 20);
+
+          let matchesStatus = true;
+          if (statusFilter === 'All') {
+            matchesStatus = true;
+          } else if (statusFilter === 'Subscribers') {
+            matchesStatus = isSub;
+          } else if (statusFilter === 'Non-Subscribers') {
+            matchesStatus = !isSub;
+          } else {
+            matchesStatus = status === statusFilter;
+          }
+
+          return matchesBranch && matchesSearch && matchesStatus;
         }
       );
     },
-    [customers, searchTerm, selectedBranch]
+    [customers, searchTerm, statusFilter, selectedBranch]
   );
 
   const openAdd = () => {
@@ -259,15 +275,32 @@ const Customers = () => {
         </div>
       </section>
 
-      <div className="relative">
-        <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary" />
-        <input
-          type="text"
-          placeholder="Search customer by name, phone, or ID..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full rounded-3xl border border-border bg-surface py-3 pl-12 pr-4 text-primary placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-blue-400/40"
-        />
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="relative md:col-span-2">
+          <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary" />
+          <input
+            type="text"
+            placeholder="Search customer by name, phone, or ID..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full rounded-3xl border border-border bg-surface py-3 pl-12 pr-4 text-primary placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+          />
+        </div>
+
+        <div className="relative">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="w-full appearance-none rounded-3xl border border-border bg-surface py-3 px-4 text-primary focus:outline-none focus:ring-2 focus:ring-blue-400/40 cursor-pointer"
+          >
+            <option value="All">All Status</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+            <option value="Subscribers">⭐ Subscribers</option>
+            <option value="Non-Subscribers">Non-Subscribers</option>
+          </select>
+          <FiChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-secondary" />
+        </div>
       </div>
 
       <section className="surface-card border border-border overflow-hidden">
@@ -613,20 +646,22 @@ const Customers = () => {
                   <span>📄</span>
                   <span>Print Account Statement</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    generateSubscriptionReceiptPDF(selectedCustomer, {
-                      amount: selectedCustomer.insuranceAmount || 20,
-                      branchName: selectedBranch !== 'All' ? selectedBranch : undefined,
-                    });
-                  }}
-                  className="flex-1 min-w-[180px] rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-4 shadow-md transition flex items-center justify-center gap-2"
-                  title="Print Subscription Receipt"
-                >
-                  <span className="text-base select-none">⭐</span>
-                  <span>Print Subscription Receipt</span>
-                </button>
+                {(selectedCustomer.isSubscriber === true || (selectedCustomer.isSubscriber !== false && Number(selectedCustomer.insuranceAmount || 0) >= 20)) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      generateSubscriptionReceiptPDF(selectedCustomer, {
+                        amount: selectedCustomer.insuranceAmount || 20,
+                        branchName: selectedBranch !== 'All' ? selectedBranch : undefined,
+                      });
+                    }}
+                    className="flex-1 min-w-[180px] rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-4 shadow-md transition flex items-center justify-center gap-2"
+                    title="Print Subscription Receipt"
+                  >
+                    <span className="text-base select-none">⭐</span>
+                    <span>Print Subscription Receipt</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {

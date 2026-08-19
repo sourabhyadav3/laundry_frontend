@@ -61,6 +61,7 @@ const DeliveryLayout = () => {
   else if (path.includes('/delivery/orders')) requiredPermission = 'view_orders';
   else if (path.includes('/delivery/customers')) requiredPermission = 'view_customers';
   else if (path.includes('/delivery/invoices')) requiredPermission = 'view_invoice_status';
+  else if (path.includes('/delivery/expenses')) requiredPermission = 'view_logistics';
   else if (path.includes('/delivery/drivers')) requiredPermission = 'view_logistics';
   else if (path.includes('/delivery/tracking')) requiredPermission = 'view_orders';
   else if (path.includes('/delivery/lcd-display')) requiredPermission = 'view_dashboard';

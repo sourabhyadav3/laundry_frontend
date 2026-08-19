@@ -205,10 +205,18 @@ const PublicReceipt = () => {
             <span className="font-bold text-gray-700">Staff / الموظف:</span>
             <span className="font-semibold text-gray-900">{order.staffName || order.createdBy || 'N/A'}</span>
           </div>
-          <div className="flex justify-between text-sm">
+          <div className="flex justify-between text-sm items-center">
             <span className="font-bold text-gray-700">Service Type / نوع الخدمة:</span>
             <span className="font-semibold text-gray-900 text-right">
-              {translatedService.en} <br/> <span dir="rtl" className="text-gray-600 text-xs">{translatedService.ar}</span>
+              {/express|urgent|مستعجل/i.test(translatedService.en || '') ? (
+                <span className="inline-block bg-red-600 text-white font-bold px-2 py-0.5 rounded text-xs">
+                  ⚡ {translatedService.en} / {translatedService.ar}
+                </span>
+              ) : (
+                <>
+                  {translatedService.en} <br/> <span dir="rtl" className="text-gray-600 text-xs">{translatedService.ar}</span>
+                </>
+              )}
             </span>
           </div>
           <div className="flex justify-between text-sm">

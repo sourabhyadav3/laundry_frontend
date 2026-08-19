@@ -28,7 +28,7 @@ import {
   getDateRange,
 } from '../../utils/reportAnalytics';
 import { ORDER_STATUSES } from '../../constants/statusStyles';
-import { exportToPDF, exportToCSV, formatCurrency, formatDate } from '../../utils/exportUtils';
+import { exportToPDF, exportToCSV, formatCurrency, formatDate, generateShiftSettlementPDF } from '../../utils/exportUtils';
 
 const REPORT_EXPORT_COLUMNS = [
   { key: 'number', label: 'Order #' },
@@ -64,6 +64,8 @@ const MetricBlock = ({ label, value }) => (
 const CATEGORIES = [
   { id: 'sales', label: 'Sales & Revenue', icon: '💰', labelAr: 'المبيعات والأرباح' },
   { id: 'customers', label: 'Customers & Debts', icon: '👥', labelAr: 'العملاء والديون' },
+  { id: 'areas', label: 'Area & City Sales', icon: '📍', labelAr: 'المبيعات والمناطق' },
+  { id: 'shifts', label: 'Daily Shift Settlement', icon: '⏱️', labelAr: 'الإغلاق اليومي للورديات' },
   { id: 'logistics', label: 'Logistics', icon: '🚚', labelAr: 'العمليات والتوصيل' },
   { id: 'staff', label: 'Staff & Drivers', icon: '👤', labelAr: 'الموظفين والسائقين' },
   { id: 'services', label: 'Laundry Services', icon: '🧺', labelAr: 'خدمات الغسيل' }
@@ -79,12 +81,18 @@ const REPORT_TYPES = {
     { id: 'top_customers', label: 'Top Purchasing Customers', labelAr: 'العملاء الأكثر شراءً' },
     { id: 'customer_debts', label: 'Outstanding Customer Debts', labelAr: 'مديونيات العملاء' }
   ],
+  areas: [
+    { id: 'area_sales', label: 'Area Sales & Customer Distribution', labelAr: 'المبيعات وتوزيع العملاء حسب المناطق' }
+  ],
+  shifts: [
+    { id: 'shift_settlement', label: 'Shift Closeout & Bank Deposit', labelAr: 'تقرير إغلاق الوردية والإيداع البنكي' }
+  ],
   logistics: [
     { id: 'completed_jobs', label: 'Completed Deliveries / Pickups', labelAr: 'المهام اللوجستية المكتملة' },
     { id: 'pending_jobs', label: 'Pending / Out for Delivery', labelAr: 'المهام اللوجستية المعلقة' }
   ],
   staff: [
-    { id: 'user_sales', label: 'User Sales Summary', labelAr: 'مبيعات الموظفين' },
+    { id: 'user_sales', label: 'Staff Sales & Customer Acquisition', labelAr: 'مبيعات واكتساب العملاء للموظفين' },
     { id: 'driver_income', label: 'Drivers Income & Deliveries', labelAr: 'دخل وأداء السائقين' }
   ],
   services: [
@@ -160,6 +168,19 @@ const Reports = () => {
         return [
           { value: 'All', label: language === 'ar' ? 'جميع العملاء' : 'All Customers' },
           ...customers.map(c => ({ value: c.id, label: c.name }))
+        ];
+      case 'area_sales': {
+        const uniqueAreas = Array.from(new Set(customers.map(c => (c.areaName || '').trim()).filter(Boolean)));
+        return [
+          { value: 'All', label: language === 'ar' ? 'جميع المناطق' : 'All Areas' },
+          ...uniqueAreas.map(a => ({ value: a, label: a }))
+        ];
+      }
+      case 'shift_settlement':
+        return [
+          { value: 'All Day', label: language === 'ar' ? 'اليوم الكامل (جميع الورديات)' : 'All Day (Full Day)' },
+          { value: 'Morning', label: language === 'ar' ? 'الوردية الصباحية (Morning Shift)' : 'Morning Shift (Before 3 PM)' },
+          { value: 'Evening', label: language === 'ar' ? 'الوردية المسائية (Evening Shift)' : 'Evening Shift (After 3 PM)' }
         ];
       default:
         return [
@@ -260,12 +281,35 @@ const Reports = () => {
         break;
       case 'user_sales':
         columns = [
-          { header: language === 'ar' ? 'الموظف' : 'Employee Name', accessor: 'name' },
+          { header: language === 'ar' ? 'الموظف / الكاشير' : 'Staff Name', accessor: 'name' },
           { header: language === 'ar' ? 'عدد الفواتير' : 'Invoices Count', accessor: 'count' },
-          { header: language === 'ar' ? 'إجمالي المبيعات' : 'Sales Generated', accessor: 'sales', format: (val) => formatCurrency(val) },
-          { header: language === 'ar' ? 'عمولة الفواتير' : 'Invoice Commission', accessor: 'invoiceComm', format: (val) => formatCurrency(val) },
-          { header: language === 'ar' ? 'عمولة الدخل' : 'Income Commission', accessor: 'incomeComm', format: (val) => formatCurrency(val) },
-          { header: language === 'ar' ? 'إجمالي العمولة' : 'Total Commission', accessor: 'totalComm', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'إجمالي المبيعات' : 'Total Sales', accessor: 'sales', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'المحصل نقداً' : 'Cash Collected', accessor: 'cashCollected', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'كي نت' : 'K-Net', accessor: 'knetCollected', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'بوكيه / باقات' : 'Bukey', accessor: 'bukeyCollected', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'آجل / غير مدفوع' : 'Credit', accessor: 'creditPending', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'مصروفات نقدية' : 'Cash Expenses', accessor: 'cashExpenses', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'صافي النقد في اليد' : 'Net Cash in Hand', accessor: 'netCashInHand', format: (val) => formatCurrency(val) },
+        ];
+        break;
+      case 'area_sales':
+        columns = [
+          { header: language === 'ar' ? 'المنطقة' : 'Area / City', accessor: 'area' },
+          { header: language === 'ar' ? 'عدد العملاء' : 'Total Customers', accessor: 'customerCount' },
+          { header: language === 'ar' ? 'المشتركين (⭐)' : 'Active Subscribers (⭐)', accessor: 'subscriberCount' },
+          { header: language === 'ar' ? 'عدد الطلبات' : 'Total Invoices', accessor: 'orderCount' },
+          { header: language === 'ar' ? 'إجمالي المبيعات' : 'Total Revenue', accessor: 'totalSales', format: (val) => formatCurrency(val) },
+        ];
+        break;
+      case 'shift_settlement':
+        columns = [
+          { header: language === 'ar' ? 'الوردية' : 'Shift', accessor: 'shift' },
+          { header: language === 'ar' ? 'عدد الفواتير' : 'Invoices Count', accessor: 'invoicesCount' },
+          { header: language === 'ar' ? 'إجمالي المبيعات' : 'Total Sales', accessor: 'totalRevenue', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'المحصل نقداً' : 'Cash Collected', accessor: 'cashCollected', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'كي نت' : 'K-Net', accessor: 'knetCollected', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'بوكيه / باقات' : 'Bukey', accessor: 'bukeyCollected', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'آجل / غير مدفوع' : 'Credit', accessor: 'creditCollected', format: (val) => formatCurrency(val) },
         ];
         break;
       case 'driver_income':
@@ -714,7 +758,17 @@ const Reports = () => {
                   {language === 'ar' ? `تم العثور على ${filteredData.length} سجل` : `Found ${filteredData.length} matching records`}
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 items-center">
+                {stepReportType === 'shift_settlement' && filteredData.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => generateShiftSettlementPDF(filteredData[0], { shift: stepParameter, branchName: 'Main Branch / الفرع الرئيسي' })}
+                    className="dashboard-hero-pill flex items-center justify-center gap-1.5 text-xs font-bold py-2 px-4 border border-purple-500/40 bg-purple-500/15 text-purple-600 hover:bg-purple-500/25 shadow-sm"
+                  >
+                    <span>🖨️</span>
+                    <span>{language === 'ar' ? 'طباعة إيصال إغلاق الوردية' : 'Print Shift Closeout Voucher'}</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handleExportCustomPDF}

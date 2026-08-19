@@ -29,8 +29,10 @@ import CounterMakeInvoice from './Pages/counter/MakeInvoice';
 import CounterOrderList from './Pages/counter/OrderList';
 import CounterInvoices from './Pages/counter/Invoices';
 import CounterPayments from './Pages/counter/Payments';
+import CounterExpenses from './Pages/counter/Expenses';
 import CounterOrderTracking from './Pages/counter/OrderTracking';
 import CounterSettings from './Pages/counter/Settings';
+import Expenses from './Pages/admin/Expenses';
 
 import DeliveryDashboard from './Pages/delivery/Dashboard';
 import AssignedPickups from './Pages/delivery/AssignedPickups';
@@ -82,6 +84,7 @@ function App() {
           <Route path="orders" element={<CounterOrderList />} />
           <Route path="invoices" element={<CounterInvoices />} />
           <Route path="payments" element={<CounterPayments />} />
+          <Route path="expenses" element={<CounterExpenses />} />
           <Route path="pickups" element={<PickupDelivery />} />
           <Route path="tracking" element={<CounterOrderTracking />} />
           <Route path="settings" element={<CounterSettings />} />
@@ -104,6 +107,7 @@ function App() {
           <Route path="orders" element={<CounterOrderList />} />
           <Route path="customers" element={<CounterCustomers />} />
           <Route path="invoices" element={<CounterInvoices />} />
+          <Route path="expenses" element={<Expenses />} />
           <Route path="drivers" element={<Drivers />} />
           <Route path="tracking" element={<CounterOrderTracking />} />
           <Route path="settings" element={<DeliverySettings />} />
@@ -154,6 +158,7 @@ function App() {
           <Route path="pickups" element={<PickupDelivery />} />
           <Route path="drivers" element={<Drivers />} />
           <Route path="payments" element={<Payments />} />
+          <Route path="expenses" element={<Expenses />} />
           <Route path="branches" element={<Branches />} />
           <Route path="branches/add" element={<Navigate to="/admin/branches" replace />} />
           <Route path="branches/:id/edit" element={<EditBranch />} />
@@ -181,6 +186,7 @@ function App() {
           <Route path="branches/add" element={<SuperAdminAddBranch />} />
           <Route path="branches/:id/edit" element={<SuperAdminEditBranch />} />
           <Route path="services" element={<LaundryServices />} />
+          <Route path="expenses" element={<Expenses />} />
           <Route path="audit-logs" element={<SuperAdminAuditLogs />} />
           <Route path="reports" element={<SuperAdminReports />} />
           <Route path="settings" element={<SuperAdminSettings />} />

@@ -42,7 +42,18 @@ const Customers = () => {
         (customer.email && customer.email.toLowerCase().includes(searchTerm.toLowerCase()));
 
       const status = customer.status || 'Active';
-      const matchesStatus = statusFilter === 'All' || status === statusFilter;
+      const isSub = customer.isSubscriber === true || (customer.isSubscriber !== false && Number(customer.insuranceAmount || 0) >= 20);
+
+      let matchesStatus = true;
+      if (statusFilter === 'All') {
+        matchesStatus = true;
+      } else if (statusFilter === 'Subscribers') {
+        matchesStatus = isSub;
+      } else if (statusFilter === 'Non-Subscribers') {
+        matchesStatus = !isSub;
+      } else {
+        matchesStatus = status === statusFilter;
+      }
 
       return matchesBranch && matchesSearch && matchesStatus;
     });
@@ -329,6 +340,17 @@ const Customers = () => {
     { key: 'customerNo', label: 'customerNo' }
   ], [branches]);
 
+  const getRowStyle = (row) => {
+    const isSub = row.isSubscriber === true || (row.isSubscriber !== false && Number(row.insuranceAmount || 0) >= 20);
+    if (isSub) {
+      return {
+        borderLeftColor: '#f59e0b',
+        backgroundColor: 'rgba(245, 158, 11, 0.04)',
+      };
+    }
+    return {};
+  };
+
   const tableColumns = [
     { header: 'Customer ID', accessor: 'customerNo', cell: (row) => row.customerNo || row.displayId || row.id },
     {
@@ -337,11 +359,12 @@ const Customers = () => {
       cell: (row) => {
         const isSub = row.isSubscriber === true || (row.isSubscriber !== false && Number(row.insuranceAmount || 0) >= 20);
         return (
-          <div className="flex items-center gap-1.5">
-            <span className="font-semibold text-primary">{row.name}</span>
+          <div className="flex items-center gap-2">
+            <span className={`font-semibold ${isSub ? 'text-amber-500 font-bold' : 'text-primary'}`}>{row.name}</span>
             {isSub && (
-              <span className="text-amber-400 text-lg leading-none select-none drop-shadow" title="Subscriber">
-                ⭐
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-500 border border-amber-500/25 select-none" title="Subscriber">
+                <span>⭐</span>
+                <span>{tr('Subscriber')}</span>
               </span>
             )}
           </div>
@@ -435,11 +458,13 @@ const Customers = () => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full appearance-none rounded-3xl border border-border bg-surface py-3 px-4 text-primary focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+            className="w-full appearance-none rounded-3xl border border-border bg-surface py-3 px-4 text-primary focus:outline-none focus:ring-2 focus:ring-blue-400/40 cursor-pointer"
           >
             <option value="All">{tr('All Status')}</option>
             <option value="Active">{tr('Active')}</option>
             <option value="Inactive">{tr('Inactive')}</option>
+            <option value="Subscribers">⭐ {tr('Subscribers')}</option>
+            <option value="Non-Subscribers">{tr('Non-Subscribers')}</option>
           </select>
           <FiChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-secondary" />
         </div>
@@ -465,7 +490,7 @@ const Customers = () => {
 
       {/* Customers Table */}
       <section className="surface-card border border-border rounded-2xl overflow-hidden">
-        <ReusableTable columns={tableColumns} data={filteredCustomers} onRowClick={handleViewCustomer} />
+        <ReusableTable columns={tableColumns} data={filteredCustomers} getRowStyle={getRowStyle} onRowClick={handleViewCustomer} />
       </section>
 
       <Modal
@@ -773,20 +798,22 @@ const Customers = () => {
                   <span>📄</span>
                   <span>{tr('Print Account Statement')}</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    generateSubscriptionReceiptPDF(selectedCustomer, {
-                      amount: selectedCustomer.insuranceAmount || 20,
-                      branchName: selectedBranch !== 'All' ? selectedBranch : undefined,
-                    });
-                  }}
-                  className="flex-1 min-w-[180px] rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-4 shadow-md transition flex items-center justify-center gap-2"
-                  title={tr('Print Subscription Receipt')}
-                >
-                  <span className="text-base select-none">⭐</span>
-                  <span>{tr('Print Subscription Receipt')}</span>
-                </button>
+                {(selectedCustomer.isSubscriber === true || (selectedCustomer.isSubscriber !== false && Number(selectedCustomer.insuranceAmount || 0) >= 20)) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      generateSubscriptionReceiptPDF(selectedCustomer, {
+                        amount: selectedCustomer.insuranceAmount || 20,
+                        branchName: selectedBranch !== 'All' ? selectedBranch : undefined,
+                      });
+                    }}
+                    className="flex-1 min-w-[180px] rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-4 shadow-md transition flex items-center justify-center gap-2"
+                    title={tr('Print Subscription Receipt')}
+                  >
+                    <span className="text-base select-none">⭐</span>
+                    <span>{tr('Print Subscription Receipt')}</span>
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     handleEdit(selectedCustomer);

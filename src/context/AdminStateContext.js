@@ -131,6 +131,7 @@ export const AdminStateProvider = ({ children }) => {
   const [branches, setBranches] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [areas, setAreas] = useState([]);
+  const [expenses, setExpenses] = useState([]);
   
   const [completedJobs, setCompletedJobs] = useState([]);
   const [roles] = useState(mockRoles);
@@ -250,6 +251,7 @@ export const AdminStateProvider = ({ children }) => {
     fetchResource('/areas', (data) => {
       setAreas(data.map(a => a.name));
     });
+    fetchResource('/expenses', setExpenses);
 
     // Handle completed jobs progressive derivation
     Promise.all([pPickups, pDeliveries]).then(([pickupsData, deliveriesData]) => {
@@ -827,7 +829,35 @@ export const AdminStateProvider = ({ children }) => {
     ]);
   };
 
+  const addExpense = async (expenseData) => {
+    try {
+      const res = await api.post('/expenses', expenseData);
+      await fetchData();
+      toast.success('Expense recorded successfully');
+      return res.data;
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Failed to record expense');
+      return null;
+    }
+  };
+
+  const deleteExpense = async (expenseId) => {
+    try {
+      await api.delete(`/expenses/${expenseId}`);
+      await fetchData();
+      toast.success('Expense deleted successfully');
+      return true;
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Failed to delete expense');
+      return false;
+    }
+  };
+
   const value = {
+    expenses,
+    setExpenses,
+    addExpense,
+    deleteExpense,
     customers,
     addCustomer,
     updateCustomer,

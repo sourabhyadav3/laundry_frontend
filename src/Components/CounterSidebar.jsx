@@ -19,6 +19,7 @@ const menuItems = [
   { label: 'Change invoice status', icon: <FiList />, to: '/counter/orders', end: true, permission: 'view_orders' },
   { label: 'Invoices', icon: <FiFileText />, to: '/counter/invoices', permission: 'view_invoice_status' },
   { label: 'Payments', icon: <FiCreditCard />, to: '/counter/payments', permission: 'view_payments' },
+  { label: 'Expenses', icon: <FiCreditCard />, to: '/counter/expenses', permission: 'view_payments' },
   { label: 'Home Service', icon: <FiTruck />, to: '/counter/pickups', permission: 'view_pickups' },
   { label: 'Order Tracking', icon: <FiMapPin />, to: '/counter/tracking', permission: 'view_order_tracking' },
   { label: 'Settings', icon: <FiSettings />, to: '/counter/settings', permission: 'manage_settings' },

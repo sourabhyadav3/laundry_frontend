@@ -1121,7 +1121,11 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
             </div>
             <div class="info-row">
               <span class="info-label">Service Type / نوع الخدمة:</span>
-              <span class="info-value">${translatedService.en === translatedService.ar ? translatedService.en : `${translatedService.en} / <span style="direction: rtl;">${translatedService.ar}</span>`}</span>
+              <span class="info-value">
+                ${/express|urgent|مستعجل/i.test(translatedService.en || '')
+                  ? `<span style="background-color: #dc2626; color: #ffffff !important; padding: 2px 6px; border-radius: 4px; font-weight: 800; display: inline-block; letter-spacing: 0.3px;">⚡ ${translatedService.en === translatedService.ar ? translatedService.en : `${translatedService.en} / ${translatedService.ar}`}</span>`
+                  : (translatedService.en === translatedService.ar ? translatedService.en : `${translatedService.en} / <span style="direction: rtl;">${translatedService.ar}</span>`)}
+              </span>
             </div>
             <div class="info-row">
               <span class="info-label">Payment Status / الدفع:</span>
@@ -1240,6 +1244,11 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
 export const generateSubscriptionReceiptPDF = (customer, options = {}) => {
   if (!customer) return;
 
+  const isSub = customer.isSubscriber === true || (customer.isSubscriber !== false && Number(customer.insuranceAmount || 0) >= 20);
+  if (!isSub && !options.force) {
+    return;
+  }
+
   const iframe = document.createElement('iframe');
   iframe.style.position = 'fixed';
   iframe.style.right = '0';
@@ -1267,11 +1276,6 @@ export const generateSubscriptionReceiptPDF = (customer, options = {}) => {
   const receiptNo = options.receiptNo || `SUB-${customer.customerNo || customer.displayId || String(customer.id || '').slice(-4) || '001'}`;
   const branchName = options.branchName || customer.branchName || 'Main Branch / الفرع الرئيسي';
   const paymentMethod = options.paymentMethod || 'Cash / نقدي';
-
-  // Build verification QR URL
-  const qrDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(
-    `Tuhama Laundry - Subscription Receipt: ${receiptNo}\nCustomer: ${customer.name || customer.englishName || ''}\nPhone: ${customer.phone || ''}\nAmount: ${formattedAmount}\nStatus: Paid / مدفوع\nDate: ${currentDateTimeStr}`
-  )}`;
 
   const customerName = customer.englishName || customer.name || 'Valued Customer';
   const arabicCustomerName = customer.arabicName || '';
@@ -2098,4 +2102,869 @@ export const getNextBranchOrderNo = (orders, branchId, prefix = 'ORD') => {
 
   const code = getBranchCode(branchId);
   return `${code}-${prefix}-${seq}`;
+};
+
+/**
+ * Generate and print a bilingual Shift Settlement and Bank Deposit Closeout voucher
+ */
+export const generateShiftSettlementPDF = (shiftData, options = {}) => {
+  if (!shiftData) return;
+
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = '0';
+  document.body.appendChild(iframe);
+
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const day = pad(now.getDate());
+  const month = pad(now.getMonth() + 1);
+  const year = now.getFullYear();
+  let hours = now.getHours();
+  const minutes = pad(now.getMinutes());
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
+  const currentDateTimeStr = `${day}/${month}/${year} ${pad(hours)}:${minutes} ${ampm}`;
+
+  const shiftName = shiftData.shift || options.shift || 'All Day / اليوم الكامل';
+  const branchName = options.branchName || 'Main Branch / الفرع الرئيسي';
+  const staffList = shiftData.staffBreakdown || [];
+  const expensesList = shiftData.expensesBreakdown || [];
+
+  const staffRowsHtml = staffList.map(st => `
+    <tr>
+      <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; font-weight: 700;">
+        ${st.name}
+        <div style="font-size: 8px; color: #555; font-weight: normal; margin-top: 1px;">
+          💵 Cash: ${formatCurrency(st.cashCollected || 0)} | 💳 K-Net: ${formatCurrency(st.knetCollected || 0)} | 🎟️ Bukey: ${formatCurrency(st.bukeyCollected || 0)} | 💰 Credit: ${formatCurrency(st.creditPending || 0)}
+        </div>
+      </td>
+      <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; text-align: center; vertical-align: top;">${st.count || 0}</td>
+      <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; text-align: right; font-family: monospace; font-weight: 800; vertical-align: top;">
+        ${formatCurrency(st.sales || 0)}
+        <div style="font-size: 8px; color: #047857; font-weight: 700;">Net: ${formatCurrency(st.netCashInHand !== undefined ? st.netCashInHand : (st.cashCollected || 0))}</div>
+      </td>
+    </tr>
+  `).join('');
+
+  const expenseRowsHtml = expensesList.map(ex => `
+    <tr>
+      <td style="padding: 4px 2px; font-size: 10px; border-bottom: 1px dashed #ddd; font-weight: 700;">
+        ${ex.title}
+        <div style="font-size: 8.5px; color: #666; font-weight: normal;">${ex.category} (${ex.paymentMethod})</div>
+      </td>
+      <td style="padding: 4px 2px; font-size: 10px; border-bottom: 1px dashed #ddd; text-align: right; font-family: monospace; font-weight: 800; color: #dc2626;">- ${formatCurrency(ex.amount || 0)}</td>
+    </tr>
+  `).join('');
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <title>Shift Settlement Report - ${shiftName}</title>
+        <style>
+          @page {
+            size: auto;
+            margin: 8mm auto;
+          }
+          * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          html, body {
+            margin: 0;
+            padding: 0;
+            background: #fff;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+          }
+          body {
+            font-family: 'Courier New', Courier, monospace, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 11px;
+            color: #000 !important;
+            line-height: 1.35;
+            padding: 6mm 0;
+          }
+          .settlement-container {
+            width: 88mm;
+            max-width: 100%;
+            margin: 0 auto;
+            border: 2px solid #000 !important;
+            border-radius: 8px;
+            padding: 12px;
+            background: #fff;
+          }
+          .brand-header {
+            text-align: center;
+            border-bottom: 2px dashed #000;
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+          }
+          .title-box {
+            text-align: center;
+            font-size: 12px;
+            font-weight: 800 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 6px 0 4px 0;
+            padding: 5px 0;
+            background: #000;
+            color: #fff !important;
+            border-radius: 4px;
+          }
+          .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 3px;
+            font-size: 10.5px;
+          }
+          .stats-grid {
+            margin: 8px 0;
+            border: 1.5px solid #000;
+            border-radius: 6px;
+            padding: 6px 8px;
+            background: #fafafa;
+          }
+          .table-title {
+            font-weight: 800;
+            font-size: 11px;
+            text-transform: uppercase;
+            margin: 8px 0 4px 0;
+            border-bottom: 1.5px solid #000;
+            padding-bottom: 2px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          th {
+            font-size: 9.5px;
+            font-weight: 800;
+            text-align: left;
+            border-bottom: 1.5px solid #000;
+            padding: 3px 2px;
+          }
+          .footer-section {
+            text-align: center;
+            font-size: 10px;
+            border-top: 1.5px dashed #000;
+            padding-top: 8px;
+            margin-top: 8px;
+            font-weight: 700;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="settlement-container">
+          <div class="brand-header">
+            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 4px;">
+              <div style="text-align: left; flex: 1;">
+                <div style="font-size: 12px; font-weight: 800;">Tuhama Laundry Co.</div>
+                <div style="font-size: 8.5px; font-weight: 700;">Daily Cash Settlement</div>
+              </div>
+              <div style="flex: 0 0 auto; margin: 0 4px;">
+                <img src="${window.location.origin}/logo.png" alt="Logo" style="width: 50px; height: 50px; object-fit: contain; display: block;" />
+              </div>
+              <div style="text-align: right; flex: 1; direction: rtl;">
+                <div style="font-size: 12px; font-weight: 800;">شركة مصابغ تهامة</div>
+                <div style="font-size: 8.5px; font-weight: 700;">تقرير إغلاق الوردية</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="title-box">
+            SHIFT &amp; CASH CLOSEOUT / تقرير الوردية
+          </div>
+
+          <div style="border-bottom: 1.5px dashed #000; padding-bottom: 6px; margin-bottom: 6px;">
+            <div class="info-row">
+              <span style="font-weight: 600;">Date &amp; Time / التاريخ:</span>
+              <span style="font-weight: 800;">${currentDateTimeStr}</span>
+            </div>
+            <div class="info-row">
+              <span style="font-weight: 600;">Shift / الوردية:</span>
+              <span style="font-weight: 800;">${shiftName}</span>
+            </div>
+            <div class="info-row">
+              <span style="font-weight: 600;">Branch / الفرع:</span>
+              <span style="font-weight: 800;">${branchName}</span>
+            </div>
+            <div class="info-row">
+              <span style="font-weight: 600;">Invoices Count / عدد الفواتير:</span>
+              <span style="font-weight: 800;">${shiftData.invoicesCount || 0}</span>
+            </div>
+          </div>
+
+          <!-- Collection & Settlement Breakdown -->
+          <div class="stats-grid">
+            <div class="info-row" style="font-size: 11px;">
+              <span style="font-weight: 700;">💵 Cash Inflow / المقبوضات النقدية:</span>
+              <span style="font-weight: 900; font-family: monospace;">${formatCurrency(shiftData.cashCollected || 0)}</span>
+            </div>
+            <div class="info-row" style="font-size: 11px;">
+              <span style="font-weight: 700;">💳 K-Net / Card / كي نت:</span>
+              <span style="font-weight: 900; font-family: monospace;">${formatCurrency(shiftData.knetCollected !== undefined ? shiftData.knetCollected : (shiftData.cardCollected || 0))}</span>
+            </div>
+            <div class="info-row" style="font-size: 11px;">
+              <span style="font-weight: 700;">🎟️ Bukey / Package / باقات وبوكيه:</span>
+              <span style="font-weight: 900; font-family: monospace;">${formatCurrency(shiftData.bukeyCollected !== undefined ? shiftData.bukeyCollected : (shiftData.linkCollected || 0))}</span>
+            </div>
+            ${(shiftData.creditCollected || 0) > 0 ? `
+            <div class="info-row" style="font-size: 11px;">
+              <span style="font-weight: 700;">💰 Credit / Unpaid / آجل وذمم:</span>
+              <span style="font-weight: 900; font-family: monospace; color: #7c3aed;">${formatCurrency(shiftData.creditCollected || 0)}</span>
+            </div>
+            ` : ''}
+            <div class="info-row" style="border-top: 1.5px solid #000; padding-top: 4px; margin-top: 4px; font-size: 12px;">
+              <span style="font-weight: 900;">GROSS SALES / إجمالي المبيعات:</span>
+              <span style="font-weight: 900; font-family: monospace;">${formatCurrency(shiftData.totalRevenue || 0)}</span>
+            </div>
+            ${(shiftData.cashExpenses || 0) > 0 ? `
+            <div class="info-row" style="font-size: 11px; color: #dc2626; border-top: 1px dashed #000; padding-top: 3px; margin-top: 3px;">
+              <span style="font-weight: 800;">💸 Less: Cash Expenses / المصروفات النقدية:</span>
+              <span style="font-weight: 900; font-family: monospace;">- ${formatCurrency(shiftData.cashExpenses || 0)}</span>
+            </div>
+            ` : ''}
+            <div class="info-row" style="border-top: 1.5px solid #000; padding-top: 4px; margin-top: 4px; font-size: 12px;">
+              <span style="font-weight: 900;">NET CASH IN HAND / صافي النقد:</span>
+              <span style="font-weight: 900; font-family: monospace; color: #047857;">${formatCurrency(shiftData.netCashInHand !== undefined ? shiftData.netCashInHand : (shiftData.cashCollected || 0))}</span>
+            </div>
+          </div>
+
+          <!-- Bank Deposit Box -->
+          <div style="border: 2px solid #000; border-radius: 6px; padding: 6px 8px; margin: 8px 0; background: #fff; text-align: center;">
+            <div style="font-size: 10px; font-weight: 700; text-transform: uppercase;">BANK DEPOSIT / المبلغ المودع بالبنك</div>
+            <div style="font-size: 15px; font-weight: 900; font-family: monospace; margin-top: 2px; color: #047857;">
+              🏦 ${formatCurrency(shiftData.bankDepositAmount !== undefined ? shiftData.bankDepositAmount : (shiftData.cashCollected || 0))}
+            </div>
+          </div>
+
+          <!-- Expenses Breakdown (If any) -->
+          ${expensesList.length > 0 ? `
+          <div class="table-title">Shift Expenses / المصروفات المسجلة</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Expense Title</th>
+                <th style="text-align: right;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${expenseRowsHtml}
+            </tbody>
+          </table>` : ''}
+
+          <!-- Staff Breakdown -->
+          ${staffList.length > 0 ? `
+          <div class="table-title">Staff Sales / مبيعات الموظفين</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Staff</th>
+                <th style="text-align: center;">Invoices</th>
+                <th style="text-align: right;">Sales</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${staffRowsHtml}
+            </tbody>
+          </table>` : ''}
+
+          <!-- Signatures Section -->
+          <div style="display: flex; justify-content: space-between; margin-top: 16px; padding-top: 12px; border-top: 1.5px dashed #000;">
+            <div style="text-align: center; flex: 1;">
+              <div style="font-size: 9px; font-weight: 700;">Cashier Signature</div>
+              <div style="font-size: 8.5px; direction: rtl;">توقيع الكاشير</div>
+              <div style="margin-top: 18px; border-bottom: 1px solid #000; width: 80%; margin-left: auto; margin-right: auto;"></div>
+            </div>
+            <div style="text-align: center; flex: 1;">
+              <div style="font-size: 9px; font-weight: 700;">Manager Signature</div>
+              <div style="font-size: 8.5px; direction: rtl;">توقيع المشرف</div>
+              <div style="margin-top: 18px; border-bottom: 1px solid #000; width: 80%; margin-left: auto; margin-right: auto;"></div>
+            </div>
+          </div>
+
+          <div class="footer-section">
+            <div>Tuhama Laundry Management System</div>
+            <div style="font-size: 8.5px; color: #777; margin-top: 2px;">Printed on ${currentDateTimeStr}</div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(htmlContent);
+  doc.close();
+
+  const triggerPrint = () => {
+    try {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    } catch (e) {
+      console.error('Print shift settlement error', e);
+    }
+  };
+
+  iframe.onload = () => {
+    const logoImg = iframe.contentWindow.document.querySelector('img[alt="Logo"]');
+    if (logoImg && !logoImg.complete) {
+      logoImg.onload = () => setTimeout(triggerPrint, 150);
+      logoImg.onerror = () => setTimeout(triggerPrint, 150);
+    } else {
+      setTimeout(triggerPrint, 250);
+    }
+  };
+
+  setTimeout(() => {
+    if (document.body.contains(iframe)) {
+      document.body.removeChild(iframe);
+    }
+  }, 10000);
+};
+
+// ==========================================
+// 10. GENERATE EXPENSE RECEIPT / VOUCHER (Thermal & A4 Slip)
+// ==========================================
+export const generateExpenseReceiptPDF = (expense, options = {}) => {
+  if (!expense) return;
+
+  const existing = document.getElementById('expense-receipt-iframe');
+  if (existing) {
+    document.body.removeChild(existing);
+  }
+
+  const iframe = document.createElement('iframe');
+  iframe.id = 'expense-receipt-iframe';
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0px';
+  iframe.style.height = '0px';
+  iframe.style.border = 'none';
+  document.body.appendChild(iframe);
+
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const day = pad(now.getDate());
+  const month = pad(now.getMonth() + 1);
+  const year = now.getFullYear();
+  let hours = now.getHours();
+  const minutes = pad(now.getMinutes());
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
+  const currentDateTimeStr = `${day}/${month}/${year} ${pad(hours)}:${minutes} ${ampm}`;
+
+  const branchName = options.branchName || expense.branchName || 'Main Branch / الفرع الرئيسي';
+  const voucherNo = expense.id || expense._id ? String(expense.id || expense._id).slice(-8).toUpperCase() : `EXP-${Date.now().toString().slice(-6)}`;
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <title>Expense Receipt - ${voucherNo}</title>
+        <style>
+          @page {
+            size: auto;
+            margin: 6mm auto;
+          }
+          * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          html, body {
+            margin: 0;
+            padding: 0;
+            background: #fff;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+          }
+          body {
+            font-family: 'Courier New', Courier, monospace, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 11px;
+            color: #000 !important;
+            line-height: 1.35;
+            padding: 4mm 0;
+          }
+          .voucher-container {
+            width: 88mm;
+            max-width: 100%;
+            margin: 0 auto;
+            border: 2px solid #000 !important;
+            border-radius: 8px;
+            padding: 12px;
+            background: #fff;
+          }
+          .brand-header {
+            text-align: center;
+            border-bottom: 2px dashed #000;
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+          }
+          .title-box {
+            text-align: center;
+            font-size: 12px;
+            font-weight: 800 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 6px 0 6px 0;
+            padding: 5px 0;
+            background: #000;
+            color: #fff !important;
+            border-radius: 4px;
+          }
+          .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 4px;
+            font-size: 10.5px;
+          }
+          .details-card {
+            margin: 8px 0;
+            border: 1.5px solid #000;
+            border-radius: 6px;
+            padding: 8px;
+            background: #fafafa;
+          }
+          .amount-box {
+            border: 2px solid #000;
+            border-radius: 6px;
+            padding: 8px;
+            margin: 8px 0;
+            background: #fff;
+            text-align: center;
+          }
+          .footer-section {
+            text-align: center;
+            font-size: 9.5px;
+            border-top: 1.5px dashed #000;
+            padding-top: 8px;
+            margin-top: 10px;
+            font-weight: 700;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="voucher-container">
+          <div class="brand-header">
+            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 4px;">
+              <div style="text-align: left; flex: 1;">
+                <div style="font-size: 12px; font-weight: 800;">Tuhama Laundry Co.</div>
+                <div style="font-size: 8.5px; font-weight: 700;">Expense Payment Voucher</div>
+              </div>
+              <div style="flex: 0 0 auto; margin: 0 4px;">
+                <img src="${window.location.origin}/logo.png" alt="Logo" style="width: 48px; height: 48px; object-fit: contain; display: block;" />
+              </div>
+              <div style="text-align: right; flex: 1; direction: rtl;">
+                <div style="font-size: 12px; font-weight: 800;">شركة مصابغ تهامة</div>
+                <div style="font-size: 8.5px; font-weight: 700;">سند صرف مصروفات</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="title-box">
+            EXPENSE RECEIPT / سند صرف
+          </div>
+
+          <!-- Metadata -->
+          <div style="border-bottom: 1.5px solid #000; padding-bottom: 6px; margin-bottom: 6px;">
+            <div class="info-row">
+              <span style="font-weight: 600;">Voucher # / رقم السند:</span>
+              <span style="font-weight: 800; font-family: monospace;">#${voucherNo}</span>
+            </div>
+            <div class="info-row">
+              <span style="font-weight: 600;">Branch / الفرع:</span>
+              <span style="font-weight: 800;">${branchName}</span>
+            </div>
+            <div class="info-row">
+              <span style="font-weight: 600;">Date & Time / التاريخ:</span>
+              <span style="font-weight: 800;">${expense.date || day + '/' + month + '/' + year} ${expense.time || ''}</span>
+            </div>
+            <div class="info-row">
+              <span style="font-weight: 600;">Shift / الوردية:</span>
+              <span style="font-weight: 800;">${expense.shift || 'General'}</span>
+            </div>
+            <div class="info-row">
+              <span style="font-weight: 600;">Logged By / المسجل:</span>
+              <span style="font-weight: 800;">${expense.createdBy || 'Staff'}</span>
+            </div>
+          </div>
+
+          <!-- Details Card -->
+          <div class="details-card">
+            <div style="font-size: 10px; font-weight: 700; color: #555; text-transform: uppercase;">Expense Description / وصف المصروف</div>
+            <div style="font-size: 13px; font-weight: 900; margin-top: 3px; color: #000;">${expense.title}</div>
+            
+            <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #ccc;">
+              <div class="info-row" style="margin-bottom: 2px;">
+                <span style="font-weight: 600;">Category / التصنيف:</span>
+                <span style="font-weight: 800;">${expense.category || 'General'}</span>
+              </div>
+              <div class="info-row" style="margin-bottom: 2px;">
+                <span style="font-weight: 600;">Paid Via / الدفع من:</span>
+                <span style="font-weight: 800;">${expense.paymentMethod === 'Cash' ? '💵 Cash Drawer / نقدي' : expense.paymentMethod}</span>
+              </div>
+              ${expense.notes ? `
+              <div style="margin-top: 4px; font-size: 9.5px; color: #444;">
+                <span style="font-weight: 700;">Remarks / ملاحظات:</span> ${expense.notes}
+              </div>
+              ` : ''}
+            </div>
+          </div>
+
+          <!-- Amount Box -->
+          <div class="amount-box">
+            <div style="font-size: 10px; font-weight: 700; text-transform: uppercase;">AMOUNT PAID / المبلغ المصروف</div>
+            <div style="font-size: 18px; font-weight: 900; font-family: monospace; margin-top: 2px; color: #dc2626;">
+              - ${formatCurrency(expense.amount || 0)}
+            </div>
+          </div>
+
+          <!-- Signatures Section -->
+          <div style="display: flex; justify-content: space-between; margin-top: 16px; padding-top: 12px; border-top: 1.5px dashed #000;">
+            <div style="text-align: center; flex: 1;">
+              <div style="font-size: 9px; font-weight: 700;">Receiver / Staff Signature</div>
+              <div style="font-size: 8.5px; direction: rtl;">توقيع المستلم</div>
+              <div style="margin-top: 22px; border-bottom: 1px solid #000; width: 80%; margin-left: auto; margin-right: auto;"></div>
+            </div>
+            <div style="text-align: center; flex: 1;">
+              <div style="font-size: 9px; font-weight: 700;">Authorized Approval</div>
+              <div style="font-size: 8.5px; direction: rtl;">اعتماد الإدارة / المشرف</div>
+              <div style="margin-top: 22px; border-bottom: 1px solid #000; width: 80%; margin-left: auto; margin-right: auto;"></div>
+            </div>
+          </div>
+
+          <div class="footer-section">
+            <div>Tuhama Laundry Management System</div>
+            <div style="font-size: 8.5px; color: #777; margin-top: 2px;">Receipt printed on ${currentDateTimeStr}</div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(htmlContent);
+  doc.close();
+
+  const triggerPrint = () => {
+    try {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    } catch (e) {
+      console.error('Print expense receipt error', e);
+    }
+  };
+
+  iframe.onload = () => {
+    const logoImg = iframe.contentWindow.document.querySelector('img[alt="Logo"]');
+    if (logoImg && !logoImg.complete) {
+      logoImg.onload = () => setTimeout(triggerPrint, 150);
+      logoImg.onerror = () => setTimeout(triggerPrint, 150);
+    } else {
+      setTimeout(triggerPrint, 250);
+    }
+  };
+
+  setTimeout(() => {
+    if (document.body.contains(iframe)) {
+      document.body.removeChild(iframe);
+    }
+  }, 10000);
+};
+
+// ==========================================
+// 11. GENERATE DAY-WISE / DAILY EXPENSES STATEMENT (Thermal & A4 Slip)
+// ==========================================
+export const generateDailyExpensesSummaryPDF = (expensesList = [], options = {}) => {
+  const existing = document.getElementById('daily-expense-statement-iframe');
+  if (existing) {
+    document.body.removeChild(existing);
+  }
+
+  const iframe = document.createElement('iframe');
+  iframe.id = 'daily-expense-statement-iframe';
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0px';
+  iframe.style.height = '0px';
+  iframe.style.border = 'none';
+  document.body.appendChild(iframe);
+
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const day = pad(now.getDate());
+  const month = pad(now.getMonth() + 1);
+  const year = now.getFullYear();
+  let hours = now.getHours();
+  const minutes = pad(now.getMinutes());
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
+  const currentDateTimeStr = `${day}/${month}/${year} ${pad(hours)}:${minutes} ${ampm}`;
+
+  const branchName = options.branchName || 'Main Branch / الفرع الرئيسي';
+  const periodLabel = options.periodLabel || `${day}/${month}/${year}`;
+  const totalAmount = expensesList.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  const cashTotal = expensesList.filter(e => /cash|نقدي/i.test(e.paymentMethod || '')).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  const otherTotal = totalAmount - cashTotal;
+
+  const rowsHtml = expensesList.length > 0 ? expensesList.map((e, idx) => `
+    <tr>
+      <td style="padding: 4px 2px; font-size: 10px; border-bottom: 1px dashed #ddd; text-align: center; color: #555;">${idx + 1}</td>
+      <td style="padding: 4px 2px; font-size: 10px; border-bottom: 1px dashed #ddd; font-weight: 700;">
+        ${e.title}
+        <div style="font-size: 8.5px; color: #666; font-weight: normal;">${e.category} (${e.paymentMethod}) - ${e.time || ''}</div>
+      </td>
+      <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; text-align: center;">${e.createdBy || 'Staff'}</td>
+      <td style="padding: 4px 2px; font-size: 10px; border-bottom: 1px dashed #ddd; text-align: right; font-family: monospace; font-weight: 800; color: #dc2626;">- ${formatCurrency(e.amount || 0)}</td>
+    </tr>
+  `).join('') : `
+    <tr>
+      <td colspan="4" style="padding: 12px; text-align: center; font-size: 10px; color: #777;">No expenses recorded for this day</td>
+    </tr>
+  `;
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <title>Daily Expenses Statement - ${periodLabel}</title>
+        <style>
+          @page {
+            size: auto;
+            margin: 6mm auto;
+          }
+          * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          html, body {
+            margin: 0;
+            padding: 0;
+            background: #fff;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+          }
+          body {
+            font-family: 'Courier New', Courier, monospace, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 11px;
+            color: #000 !important;
+            line-height: 1.35;
+            padding: 4mm 0;
+          }
+          .statement-container {
+            width: 88mm;
+            max-width: 100%;
+            margin: 0 auto;
+            border: 2px solid #000 !important;
+            border-radius: 8px;
+            padding: 12px;
+            background: #fff;
+          }
+          .brand-header {
+            text-align: center;
+            border-bottom: 2px dashed #000;
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+          }
+          .title-box {
+            text-align: center;
+            font-size: 11.5px;
+            font-weight: 800 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 6px 0 6px 0;
+            padding: 5px 0;
+            background: #000;
+            color: #fff !important;
+            border-radius: 4px;
+          }
+          .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 3px;
+            font-size: 10.5px;
+          }
+          .stats-grid {
+            margin: 8px 0;
+            border: 1.5px solid #000;
+            border-radius: 6px;
+            padding: 6px 8px;
+            background: #fafafa;
+          }
+          .table-title {
+            font-weight: 800;
+            font-size: 11px;
+            text-transform: uppercase;
+            margin: 8px 0 4px 0;
+            border-bottom: 1.5px solid #000;
+            padding-bottom: 2px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          th {
+            font-size: 9.5px;
+            font-weight: 800;
+            text-align: left;
+            border-bottom: 1.5px solid #000;
+            padding: 3px 2px;
+          }
+          .footer-section {
+            text-align: center;
+            font-size: 9.5px;
+            border-top: 1.5px dashed #000;
+            padding-top: 8px;
+            margin-top: 10px;
+            font-weight: 700;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="statement-container">
+          <div class="brand-header">
+            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 4px;">
+              <div style="text-align: left; flex: 1;">
+                <div style="font-size: 12px; font-weight: 800;">Tuhama Laundry Co.</div>
+                <div style="font-size: 8.5px; font-weight: 700;">Daily Expenses Statement</div>
+              </div>
+              <div style="flex: 0 0 auto; margin: 0 4px;">
+                <img src="${window.location.origin}/logo.png" alt="Logo" style="width: 48px; height: 48px; object-fit: contain; display: block;" />
+              </div>
+              <div style="text-align: right; flex: 1; direction: rtl;">
+                <div style="font-size: 12px; font-weight: 800;">شركة مصابغ تهامة</div>
+                <div style="font-size: 8.5px; font-weight: 700;">كشف المصروفات اليومية</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="title-box">
+            DAILY EXPENSES / كشف المصروفات
+          </div>
+
+          <!-- Metadata -->
+          <div style="border-bottom: 1.5px solid #000; padding-bottom: 5px; margin-bottom: 6px;">
+            <div class="info-row">
+              <span style="font-weight: 600;">Statement Date / التاريخ:</span>
+              <span style="font-weight: 800;">${periodLabel}</span>
+            </div>
+            <div class="info-row">
+              <span style="font-weight: 600;">Branch / الفرع:</span>
+              <span style="font-weight: 800;">${branchName}</span>
+            </div>
+            <div class="info-row">
+              <span style="font-weight: 600;">Items Count / عدد السجلات:</span>
+              <span style="font-weight: 800;">${expensesList.length}</span>
+            </div>
+          </div>
+
+          <!-- Summary Box -->
+          <div class="stats-grid">
+            <div class="info-row" style="font-size: 10.5px;">
+              <span style="font-weight: 700;">💵 Cash Outflow / نقدي من الدرج:</span>
+              <span style="font-weight: 900; font-family: monospace;">- ${formatCurrency(cashTotal)}</span>
+            </div>
+            ${otherTotal > 0 ? `
+            <div class="info-row" style="font-size: 10.5px;">
+              <span style="font-weight: 700;">💳 Card/Bank / بطاقة وبنك:</span>
+              <span style="font-weight: 900; font-family: monospace;">- ${formatCurrency(otherTotal)}</span>
+            </div>
+            ` : ''}
+            <div class="info-row" style="border-top: 1.5px solid #000; padding-top: 4px; margin-top: 4px; font-size: 12px;">
+              <span style="font-weight: 900;">TOTAL EXPENSES / إجمالي المصروفات:</span>
+              <span style="font-weight: 900; font-family: monospace; color: #dc2626;">- ${formatCurrency(totalAmount)}</span>
+            </div>
+          </div>
+
+          <!-- Itemized Breakdown -->
+          <div class="table-title">Itemized List / بيان المصروفات</div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 14px; text-align: center;">#</th>
+                <th>Expense & Category</th>
+                <th style="text-align: center;">Staff</th>
+                <th style="text-align: right;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+
+          <!-- Signatures Section -->
+          <div style="display: flex; justify-content: space-between; margin-top: 16px; padding-top: 12px; border-top: 1.5px dashed #000;">
+            <div style="text-align: center; flex: 1;">
+              <div style="font-size: 9px; font-weight: 700;">Cashier Signature</div>
+              <div style="font-size: 8.5px; direction: rtl;">توقيع الكاشير</div>
+              <div style="margin-top: 20px; border-bottom: 1px solid #000; width: 80%; margin-left: auto; margin-right: auto;"></div>
+            </div>
+            <div style="text-align: center; flex: 1;">
+              <div style="font-size: 9px; font-weight: 700;">Manager Signature</div>
+              <div style="font-size: 8.5px; direction: rtl;">توقيع المشرف</div>
+              <div style="margin-top: 20px; border-bottom: 1px solid #000; width: 80%; margin-left: auto; margin-right: auto;"></div>
+            </div>
+          </div>
+
+          <div class="footer-section">
+            <div>Tuhama Laundry Management System</div>
+            <div style="font-size: 8.5px; color: #777; margin-top: 2px;">Statement printed on ${currentDateTimeStr}</div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(htmlContent);
+  doc.close();
+
+  const triggerPrint = () => {
+    try {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    } catch (e) {
+      console.error('Print daily expense statement error', e);
+    }
+  };
+
+  iframe.onload = () => {
+    const logoImg = iframe.contentWindow.document.querySelector('img[alt="Logo"]');
+    if (logoImg && !logoImg.complete) {
+      logoImg.onload = () => setTimeout(triggerPrint, 150);
+      logoImg.onerror = () => setTimeout(triggerPrint, 150);
+    } else {
+      setTimeout(triggerPrint, 250);
+    }
+  };
+
+  setTimeout(() => {
+    if (document.body.contains(iframe)) {
+      document.body.removeChild(iframe);
+    }
+  }, 10000);
 };

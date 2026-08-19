@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { FiMenu, FiX, FiHome, FiUsers, FiFileText, FiTool, FiTruck, FiCreditCard, FiUserCheck, FiBarChart2, FiSettings, FiMapPin, FiList, FiPlusCircle } from 'react-icons/fi';
+import { FiMenu, FiX, FiHome, FiUsers, FiFileText, FiTool, FiTruck, FiCreditCard, FiDollarSign, FiUserCheck, FiBarChart2, FiSettings, FiMapPin, FiList, FiPlusCircle } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { FiLogOut } from 'react-icons/fi';
 import { toast } from 'react-toastify';
@@ -17,6 +17,7 @@ const menuItems = [
   { label: 'Home Service', icon: <FiTruck />, to: '/admin/pickups', permission: 'view_pickups' },
   { label: 'Drivers', icon: <FiUsers />, to: '/admin/drivers', permission: 'view_drivers' },
   { label: 'Payments', icon: <FiCreditCard />, to: '/admin/payments', permission: 'view_payments' },
+  { label: 'Expenses', icon: <FiDollarSign />, to: '/admin/expenses', permission: 'view_payments' },
   { label: 'Staff Management', icon: <FiUserCheck />, to: '/admin/staff', permission: 'manage_staff' },
   { label: 'Reports', icon: <FiBarChart2 />, to: '/admin/reports', permission: 'view_reports' },
   { label: 'Settings', icon: <FiSettings />, to: '/admin/settings', permission: 'manage_settings' },

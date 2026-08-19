@@ -62,8 +62,24 @@ const DashboardOverview = () => {
 
   const tableColumns = [
     { header: t('admin.orderNo') || 'Order #', accessor: 'number' },
-    { header: t('admin.customer') || 'Customer', accessor: 'customerName' },
-    { header: t('admin.service') || 'Service', accessor: 'serviceType' },
+    {
+      header: t('admin.service') || 'Service',
+      accessor: 'serviceType',
+      cell: (row) => {
+        const serviceName = row.serviceType || row.service;
+        if (!serviceName) return <span className="text-secondary">—</span>;
+        const isExpress = /express|urgent|مستعجل/i.test(String(serviceName));
+        if (isExpress) {
+          return (
+            <span className="inline-flex items-center gap-1 bg-red-600 text-white font-bold px-2.5 py-0.5 rounded-md text-xs shadow-sm whitespace-nowrap">
+              <span>⚡</span>
+              <span>{serviceName}</span>
+            </span>
+          );
+        }
+        return <span className="font-medium text-primary whitespace-nowrap">{serviceName}</span>;
+      }
+    },
     {
       header: t('admin.status') || 'Status',
       accessor: 'status',
@@ -187,25 +203,56 @@ const DashboardOverview = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
-                  {recentOrdersFeed.map((order) => (
-                    <tr key={order.id} className="transition hover:bg-surface-alt/40">
-                      <td className="px-4 py-3 text-xs font-semibold text-primary whitespace-nowrap">{order.number}</td>
-                      <td className="px-4 py-3 text-xs text-primary whitespace-nowrap">{order.customerName}</td>
-                      <td className="px-4 py-3 text-xs text-secondary whitespace-nowrap">{order.serviceType}</td>
-                      <td className="px-4 py-3 text-xs text-primary whitespace-nowrap">{formatCurrency(order.totalAmount)}</td>
-                      <td className="px-4 py-3 text-xs text-secondary whitespace-nowrap">{formatDate(order.date)}</td>
-                      <td className="px-4 py-3 text-xs whitespace-nowrap">
-                        <span className={`status-pill border text-[10px] py-1 px-2.5 ${getOrderStatusStyle(order.status)}`}>
-                          {order.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-xs whitespace-nowrap">
-                        <span className={`status-pill border text-[10px] py-1 px-2.5 ${paymentStatusStyles[order.paymentStatus] || paymentStatusStyles.Pending}`}>
-                          {order.paymentStatus}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {recentOrdersFeed.map((order) => {
+                    const isEdited = order.isEdited || order.editedAt || (order.timeline && Array.isArray(order.timeline) && order.timeline.some(t => /edit/i.test(t.comment || '')));
+                    return (
+                      <tr
+                        key={order.id}
+                        className="transition hover:bg-surface-alt/40"
+                        style={isEdited ? { backgroundColor: 'rgba(239, 68, 68, 0.12)', borderLeft: '4px solid #ef4444' } : {}}
+                      >
+                        <td className="px-4 py-3 text-xs font-semibold text-primary whitespace-nowrap">
+                          <div className="flex items-center gap-1.5 font-mono">
+                            <span>{order.number}</span>
+                            {isEdited && (
+                              <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[9px] font-bold bg-red-500/15 text-red-600 border border-red-500/25">
+                                ✏️ Edited
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-primary whitespace-nowrap">{order.customerName}</td>
+                        <td className="px-4 py-3 text-xs text-secondary whitespace-nowrap">
+                          {(() => {
+                            const sName = order.serviceType || order.service;
+                            if (!sName) return '—';
+                            const isExp = /express|urgent|مستعجل/i.test(String(sName));
+                            if (isExp) {
+                              return (
+                                <span className="inline-flex items-center gap-1 bg-red-600 text-white font-bold px-2 py-0.5 rounded-md text-[11px] shadow-sm">
+                                  <span>⚡</span>
+                                  <span>{sName}</span>
+                                </span>
+                              );
+                            }
+                            return <span className="text-primary font-medium">{sName}</span>;
+                          })()}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-primary whitespace-nowrap">{formatCurrency(order.totalAmount)}</td>
+                        <td className="px-4 py-3 text-xs text-secondary whitespace-nowrap">{formatDate(order.date)}</td>
+                        <td className="px-4 py-3 text-xs whitespace-nowrap">
+                          <span className={`status-pill border text-[10px] py-1 px-2.5 ${getOrderStatusStyle(order.status)}`}>
+                            {order.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs whitespace-nowrap">
+                          <span className={`status-pill border text-[10px] py-1 px-2.5 ${paymentStatusStyles[order.paymentStatus] || paymentStatusStyles.Pending}`}>
+                            {order.paymentStatus}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

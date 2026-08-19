@@ -94,7 +94,16 @@ const OrderTracking = () => {
               </div>
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-secondary">Service</p>
-                <p className="mt-1 font-semibold text-primary">{activeOrder.serviceType}</p>
+                <div className="mt-1">
+                  {/express|urgent|مستعجل/i.test(String(activeOrder.serviceType || '')) ? (
+                    <span className="inline-flex items-center gap-1 bg-red-600 text-white font-bold px-2 py-0.5 rounded-md text-xs shadow-sm">
+                      <span>⚡</span>
+                      <span>{activeOrder.serviceType}</span>
+                    </span>
+                  ) : (
+                    <p className="font-semibold text-primary">{activeOrder.serviceType || '—'}</p>
+                  )}
+                </div>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-secondary">Amount</p>

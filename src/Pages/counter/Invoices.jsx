@@ -513,15 +513,15 @@ const Invoices = () => {
 
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      { method: t('counter.makeInvoice.paymentCash') || 'Cash', icon: '💵', bg: 'linear-gradient(135deg,#059669,#10b981)', shadow: 'rgba(16,185,129,0.4)', step: null, payMethod: 'Cash' },
-                      { method: t('counter.makeInvoice.paymentCard') || 'Card', icon: '💳', bg: 'linear-gradient(135deg,#3b82f6,#4f46e5)', shadow: 'rgba(59,130,246,0.4)', step: 'card', payMethod: 'Card' },
-                      { method: t('counter.makeInvoice.paymentLink') || 'Link', icon: '🔗', bg: 'linear-gradient(135deg,#f59e0b,#d97706)', shadow: 'rgba(245,158,11,0.4)', step: 'link', payMethod: 'Link' },
-                      { method: t('counter.makeInvoice.paymentCredit') || 'Credit', icon: '💰', bg: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', shadow: 'rgba(139,92,246,0.4)', step: 'wamt', payMethod: 'Credit' },
-                    ].map(({ method, icon, bg, shadow, step, payMethod }) => (
+                      { method: t('counter.makeInvoice.paymentCash') || 'CASH', icon: '💵', bg: 'linear-gradient(135deg,#059669,#10b981)', shadow: 'rgba(16,185,129,0.4)', payMethod: 'Cash' },
+                      { method: t('counter.makeInvoice.paymentBukey') || 'BUKEY', icon: '🎟️', bg: 'linear-gradient(135deg,#3b82f6,#4f46e5)', shadow: 'rgba(59,130,246,0.4)', payMethod: 'Bukey' },
+                      { method: t('counter.makeInvoice.paymentKnet') || 'K-NET', icon: '💳', bg: 'linear-gradient(135deg,#f59e0b,#d97706)', shadow: 'rgba(245,158,11,0.4)', payMethod: 'K-Net' },
+                      { method: t('counter.makeInvoice.paymentCredit') || 'CREDIT', icon: '💰', bg: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', shadow: 'rgba(139,92,246,0.4)', payMethod: 'Credit' },
+                    ].map(({ method, icon, bg, shadow, payMethod }) => (
                       <button
                         key={payMethod}
                         type="button"
-                        onClick={() => step ? setPaymentStep(step) : handleSettleAndPay(payMethod)}
+                        onClick={() => handleSettleAndPay(payMethod)}
                         className="relative flex flex-col items-center justify-center p-4 rounded-2xl text-white transition-all hover:-translate-y-1 active:scale-95 group overflow-hidden"
                         style={{ background: bg, boxShadow: `0 8px 20px -5px ${shadow}` }}
                       >

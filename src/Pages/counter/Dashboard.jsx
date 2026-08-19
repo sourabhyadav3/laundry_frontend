@@ -178,8 +178,24 @@ const CounterDashboard = () => {
 
   const tableColumns = [
     { header: t('admin.orderNo') || 'Order #', accessor: 'number' },
-    { header: t('admin.customer') || 'Customer', accessor: 'customerName' },
-    { header: t('admin.service') || 'Service', accessor: 'serviceType' },
+    {
+      header: t('admin.service') || 'Service',
+      accessor: 'serviceType',
+      cell: (row) => {
+        const serviceName = row.serviceType || row.service;
+        if (!serviceName) return <span className="text-secondary">—</span>;
+        const isExpress = /express|urgent|مستعجل/i.test(String(serviceName));
+        if (isExpress) {
+          return (
+            <span className="inline-flex items-center gap-1 bg-red-600 text-white font-bold px-2 py-0.5 rounded-md text-xs shadow-sm whitespace-nowrap">
+              <span>⚡</span>
+              <span>{serviceName}</span>
+            </span>
+          );
+        }
+        return <span className="font-medium text-primary whitespace-nowrap">{serviceName}</span>;
+      }
+    },
     {
       header: t('admin.status') || 'Status',
       accessor: 'status',
@@ -255,6 +271,10 @@ const CounterDashboard = () => {
                   <p className="mt-2 font-semibold text-primary text-xs">{t('counter.collectPayment') || "Collect Payment"}</p>
                 </Link>
               )}
+              <Link to="/counter/expenses" className="action-button p-4 text-left border-rose-500/30 hover:border-rose-500/50">
+                <span className="text-lg">💸</span>
+                <p className="mt-2 font-semibold text-primary text-xs">{language === 'ar' ? 'المصروفات' : 'Expenses'}</p>
+              </Link>
               {allowedPermissions.includes('view_orders') && (
                 <Link to="/counter/tracking" className="action-button p-4 text-left">
                   <FiMapPin size={18} />
