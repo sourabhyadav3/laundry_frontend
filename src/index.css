@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html{
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+  width: 100%;
+}
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  width: 100%;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Custom premium horizontal scrollbar */
+.custom-scrollbar-horizontal::-webkit-scrollbar {
+  height: 6px;
+}
+.custom-scrollbar-horizontal::-webkit-scrollbar-track {
+  background: transparent !important;
+  border-radius: 9999px;
+}
+.custom-scrollbar-horizontal::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 9999px;
+  transition: background-color 0.2s ease;
+}
+.custom-scrollbar-horizontal::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.75);
+}
+
+/* Hide scrollbar while keeping scroll functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

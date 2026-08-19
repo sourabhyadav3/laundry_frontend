@@ -1,0 +1,131 @@
+import React, { useContext } from 'react';
+import { FiEye, FiRefreshCw } from 'react-icons/fi';
+import ReusableTable from '../ReusableTable';
+import { formatCurrency, formatDate } from '../../utils/exportUtils';
+import { getOrderStatusStyle, paymentStatusStyles } from '../../constants/statusStyles';
+import { AdminStateContext } from '../../context/AdminStateContext';
+
+const OrderTable = ({ orders, onView, onUpdateStatus, selectedOrderIds, setSelectedOrderIds }) => {
+  const { catalog, branches } = useContext(AdminStateContext);
+
+  const getBranchName = (branchIdOrName) => {
+    if (!branchIdOrName) return 'Main Branch';
+    const b = branches?.find((branch) => String(branch.id) === String(branchIdOrName) || branch.name === branchIdOrName);
+    return b ? b.name : branchIdOrName;
+  };
+
+  const getRowStyle = (row) => {
+    if (!row.itemDetails || row.itemDetails.length === 0) return {};
+    const firstItem = row.itemDetails[0];
+    const catalogItem = catalog?.find(
+      (g) => g.name.toLowerCase() === firstItem.name.toLowerCase()
+    );
+    if (catalogItem && catalogItem.color) {
+      const color = catalogItem.color;
+      return {
+        backgroundColor: `${color}30`, // darker/more visible background opacity
+        borderLeftColor: color,
+      };
+    }
+    return {};
+  };
+  const columns = [
+    ...(setSelectedOrderIds ? [{
+      header: (
+        <input
+          type="checkbox"
+          checked={orders.length > 0 && selectedOrderIds.length === orders.length}
+          onChange={(e) => {
+            if (e.target.checked) {
+              setSelectedOrderIds(orders.map(o => o.id || o._id));
+            } else {
+              setSelectedOrderIds([]);
+            }
+          }}
+          className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-border bg-surface-alt cursor-pointer"
+        />
+      ),
+      accessor: 'checkbox',
+      cell: (row) => (
+        <input
+          type="checkbox"
+          checked={selectedOrderIds.includes(row.id || row._id)}
+          onChange={(e) => {
+            const id = row.id || row._id;
+            if (e.target.checked) {
+              setSelectedOrderIds(prev => [...prev, id]);
+            } else {
+              setSelectedOrderIds(prev => prev.filter(item => item !== id));
+            }
+          }}
+          className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-border bg-surface-alt cursor-pointer"
+        />
+      )
+    }] : []),
+    { header: 'Order Number', accessor: 'number' },
+    { header: 'Customer', accessor: 'customerName' },
+    { header: 'Branch', accessor: 'branchId', cell: (row) => getBranchName(row.branchId || row.branch) },
+    { header: 'Service', accessor: 'serviceType' },
+    {
+      header: 'Delivery Type',
+      accessor: 'deliveryType',
+      cell: (row) => {
+        const isHome = row.deliveryType === 'Home Delivery' || row.isHomeDelivery;
+        return (
+          <span className={`px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap ${isHome ? 'bg-indigo-500/10 text-indigo-500' : 'bg-slate-500/10 text-slate-500'}`}>
+            {isHome ? 'Home Delivery' : 'Branch Pickup'}
+          </span>
+        );
+      }
+    },
+    {
+      header: 'Amount',
+      accessor: 'totalAmount',
+      format: (val) => formatCurrency(val),
+    },
+    {
+      header: 'Payment Status',
+      accessor: 'paymentStatus',
+      cell: (row) => (
+        <span className={paymentStatusStyles[row.paymentStatus] || paymentStatusStyles.Pending}>
+          {row.paymentStatus}
+        </span>
+      ),
+    },
+    {
+      header: 'Order Status',
+      accessor: 'status',
+      cell: (row) => (
+        <span className={getOrderStatusStyle(row.status)}>{row.status}</span>
+      ),
+    },
+    {
+      header: 'Delivery Date',
+      accessor: 'deliveryDate',
+      format: (val) => formatDate(val),
+    },
+    {
+      header: 'Actions',
+      accessor: 'id',
+      cell: (row) => (
+        <div className="flex items-center gap-2">
+          <button type="button" className="icon-button-small" onClick={() => onView(row)} aria-label="View">
+            <FiEye size={16} />
+          </button>
+          <button
+            type="button"
+            className="icon-button-small"
+            onClick={() => onUpdateStatus(row)}
+            aria-label="Update status"
+          >
+            <FiRefreshCw size={16} />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  return <ReusableTable columns={columns} data={orders} getRowStyle={getRowStyle} onRowClick={onView} />;
+};
+
+export default OrderTable;
