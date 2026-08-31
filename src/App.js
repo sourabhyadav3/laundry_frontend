@@ -57,6 +57,7 @@ import SuperAdminEditBranch from './Pages/superadmin/EditBranch';
 import SuperAdminReports from './Pages/superadmin/Reports';
 import SuperAdminSettings from './Pages/superadmin/Settings';
 import SuperAdminAuditLogs from './Pages/superadmin/AuditLogs';
+import SuperAdminGarments from './Pages/superadmin/Garments';
 
 import PublicReceipt from './Pages/Public/PublicReceipt';
 
@@ -188,6 +189,7 @@ function App() {
           <Route path="services" element={<LaundryServices />} />
           <Route path="expenses" element={<Expenses />} />
           <Route path="audit-logs" element={<SuperAdminAuditLogs />} />
+          <Route path="garments" element={<SuperAdminGarments />} />
           <Route path="reports" element={<SuperAdminReports />} />
           <Route path="settings" element={<SuperAdminSettings />} />
         </Route>

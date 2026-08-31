@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import {
   FiBriefcase,
   FiSun,
@@ -10,18 +10,25 @@ import {
   FiEdit2,
   FiEye,
   FiEyeOff,
+  FiDatabase,
+  FiTrash2,
+  FiDownload,
 } from 'react-icons/fi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useSettings, DEFAULT_SETTINGS } from '../../context/SettingsContext';
 import { useTheme } from '../../context/ThemeContext';
+import { AdminStateContext } from '../../context/AdminStateContext';
 import ThemeToggle from '../../Components/ThemeToggle';
 import Modal from '../../Components/Modal';
+import { formatCurrency, formatDate, exportToCSV } from '../../utils/exportUtils';
+import api from '../../utils/api';
 
 const SECTIONS = [
   { id: 'business', label: 'Business Profile', icon: FiBriefcase },
   { id: 'theme', label: 'Theme Settings', icon: FiSun },
   { id: 'account', label: 'Account Settings', icon: FiUser },
+  { id: 'retention', label: 'Data Retention (2-Yr Invoices)', icon: FiDatabase },
 ];
 
 const inputClass =
@@ -58,6 +65,94 @@ const Settings = () => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' });
+
+  // Data Retention / 2-Year Invoices Purge State
+  const { orders, setOrders } = useContext(AdminStateContext) || {};
+  const [retentionYears, setRetentionYears] = useState(2);
+  const [purgePreview, setPurgePreview] = useState(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [isPurging, setIsPurging] = useState(false);
+  const [showPurgeModal, setShowPurgeModal] = useState(false);
+  const [purgeConfirmText, setPurgeConfirmText] = useState('');
+
+  const loadPurgePreview = useCallback(async (years = retentionYears) => {
+    setIsLoadingPreview(true);
+    try {
+      const res = await api.get(`/orders/purge-preview?years=${years}`);
+      if (res && res.data) {
+        setPurgePreview(res.data);
+      }
+    } catch (err) {
+      // Fallback calculation using local orders
+      const cutoff = new Date(Date.now() - years * 365.25 * 24 * 60 * 60 * 1000);
+      const cutoffStr = cutoff.toISOString().split('T')[0];
+      const eligible = (orders || []).filter(o => {
+        const orderDate = new Date(o.createdAt || o.date);
+        return orderDate <= cutoff;
+      });
+      const totalAmount = eligible.reduce((s, o) => s + (Number(o.totalAmount) || 0), 0);
+      setPurgePreview({
+        cutoffDate: cutoffStr,
+        years,
+        eligibleCount: eligible.length,
+        totalAmount,
+        orders: eligible
+      });
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  }, [retentionYears, orders]);
+
+  useEffect(() => {
+    if (activeSection === 'retention') {
+      loadPurgePreview(retentionYears);
+    }
+  }, [activeSection, retentionYears, loadPurgePreview]);
+
+  const handleExportOldInvoices = () => {
+    if (!purgePreview || !purgePreview.orders || purgePreview.orders.length === 0) {
+      toast.info('No old invoices found to export.');
+      return;
+    }
+    const headers = [
+      { header: 'Invoice #', accessor: 'number' },
+      { header: 'Customer', accessor: 'customerName' },
+      { header: 'Date', accessor: 'date' },
+      { header: 'Service', accessor: 'serviceType' },
+      { header: 'Total (KWD)', accessor: 'totalAmount' },
+      { header: 'Status', accessor: 'status' },
+      { header: 'Payment', accessor: 'paymentStatus' },
+    ];
+    exportToCSV(purgePreview.orders, headers, `invoices_backup_older_than_${retentionYears}years_${purgePreview.cutoffDate}`);
+    toast.success('Backup CSV exported successfully');
+  };
+
+  const handleExecutePurge = async () => {
+    if (purgeConfirmText.trim().toUpperCase() !== 'DELETE') {
+      toast.error('Please type DELETE to confirm');
+      return;
+    }
+    setIsPurging(true);
+    try {
+      const res = await api.post('/orders/purge-old-invoices', { years: retentionYears });
+      const count = res?.data?.deletedCount ?? purgePreview?.eligibleCount ?? 0;
+      toast.success(`Successfully deleted ${count} invoices older than ${retentionYears} years.`);
+      
+      // Update local state if orders context is available
+      if (setOrders && purgePreview?.cutoffDate) {
+        const cutoff = new Date(purgePreview.cutoffDate);
+        setOrders(prev => prev.filter(o => new Date(o.createdAt || o.date) > cutoff));
+      }
+
+      setShowPurgeModal(false);
+      setPurgeConfirmText('');
+      loadPurgePreview(retentionYears);
+    } catch (err) {
+      toast.error('Failed to purge old invoices');
+    } finally {
+      setIsPurging(false);
+    }
+  };
 
   const handleSaveBusiness = () => {
     updateSection('business', businessForm);
@@ -218,6 +313,114 @@ const Settings = () => {
           </div>
         );
 
+      case 'retention':
+        return (
+          <div className="space-y-6">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">🗄️</span>
+                <h2 className="text-xl font-bold text-primary">Data Retention &amp; Invoices Cleanup (مسح الفواتير القديمة)</h2>
+              </div>
+              <p className="mt-1 text-sm text-secondary">
+                Purge invoices and records older than 2 years to optimize system performance and reduce storage.
+              </p>
+            </div>
+
+            {/* Retention Parameter Selector */}
+            <div className="p-4 rounded-2xl bg-surface-alt border border-border space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-secondary uppercase tracking-wider">
+                    Retention Period
+                  </label>
+                  <p className="text-xs text-secondary mt-0.5">
+                    Target records older than selected duration:
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 5].map((yr) => (
+                    <button
+                      key={yr}
+                      type="button"
+                      onClick={() => setRetentionYears(yr)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                        retentionYears === yr
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'bg-surface text-secondary hover:text-primary border border-border'
+                      }`}
+                    >
+                      {yr} {yr === 1 ? 'Year' : 'Years'} {yr === 2 && '⭐ (Recommended)'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Live Preview Metric Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-border/60">
+                <div className="p-3.5 rounded-xl bg-surface border border-border">
+                  <p className="text-[10px] font-bold uppercase text-secondary tracking-wider">Cutoff Date</p>
+                  <p className="text-base font-extrabold font-mono text-primary mt-1">
+                    {purgePreview?.cutoffDate ? formatDate(purgePreview.cutoffDate) : 'Calculating...'}
+                  </p>
+                  <p className="text-[10px] text-secondary mt-0.5">Invoices before this date</p>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-surface border border-border">
+                  <p className="text-[10px] font-bold uppercase text-secondary tracking-wider">Eligible Invoices</p>
+                  <p className="text-xl font-extrabold text-rose-500 mt-1">
+                    {isLoadingPreview ? '...' : `${purgePreview?.eligibleCount || 0} invoices`}
+                  </p>
+                  <p className="text-[10px] text-secondary mt-0.5">Ready for safe deletion</p>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-surface border border-border">
+                  <p className="text-[10px] font-bold uppercase text-secondary tracking-wider">Total Value</p>
+                  <p className="text-lg font-extrabold font-mono text-primary mt-1">
+                    {isLoadingPreview ? '...' : formatCurrency(purgePreview?.totalAmount || 0)}
+                  </p>
+                  <p className="text-[10px] text-secondary mt-0.5">Historical sales volume</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Warning & Action Zone */}
+            <div className="p-5 rounded-2xl bg-rose-500/10 border border-rose-500/30 space-y-4">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl select-none">⚠️</span>
+                <div className="flex-1">
+                  <h4 className="text-sm font-bold text-rose-600 dark:text-rose-400">
+                    Safe Data Deletion Notice
+                  </h4>
+                  <p className="text-xs text-primary mt-1">
+                    Deleting invoices older than {retentionYears} years permanently removes old completed orders and associated payment logs created before <b>{purgePreview?.cutoffDate || '2 years ago'}</b>. Recent customer balances, active customers, catalog garments, and new invoices are preserved safely.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t border-rose-500/20">
+                <button
+                  type="button"
+                  onClick={handleExportOldInvoices}
+                  disabled={!purgePreview || purgePreview.eligibleCount === 0}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-surface hover:bg-surface-alt text-primary border border-border font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <FiDownload size={15} />
+                  <span>Download Backup (CSV)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowPurgeModal(true)}
+                  disabled={!purgePreview || purgePreview.eligibleCount === 0}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <FiTrash2 size={15} />
+                  <span>Delete Invoices Older Than {retentionYears} Years</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
 
       default:
         return null;
@@ -310,6 +513,63 @@ const Settings = () => {
           <button type="button" onClick={handleChangePassword} className="w-full rounded-xl bg-blue-500/10 py-2 font-semibold text-blue-600">
             Update Password
           </button>
+        </div>
+      </Modal>
+
+      {/* ===== PURGE OLD INVOICES CONFIRMATION MODAL ===== */}
+      <Modal
+        isOpen={showPurgeModal}
+        onClose={() => {
+          setShowPurgeModal(false);
+          setPurgeConfirmText('');
+        }}
+        title="Confirm Deletion of 2-Year Old Invoices"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-center space-y-2">
+            <span className="text-4xl">🛑</span>
+            <h4 className="text-sm font-bold text-rose-600 dark:text-rose-400">
+              Permanently Delete {purgePreview?.eligibleCount || 0} Old Invoices?
+            </h4>
+            <p className="text-xs text-secondary">
+              All invoices created before <b>{purgePreview?.cutoffDate}</b> ({retentionYears} years ago) will be permanently deleted.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-secondary uppercase">
+              Type <span className="text-rose-500 font-mono font-black">DELETE</span> to confirm:
+            </label>
+            <input
+              type="text"
+              placeholder="Type DELETE"
+              value={purgeConfirmText}
+              onChange={(e) => setPurgeConfirmText(e.target.value)}
+              className="w-full rounded-xl border border-rose-500/40 bg-surface px-3 py-2 text-primary font-mono text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handleExecutePurge}
+              disabled={purgeConfirmText.trim().toUpperCase() !== 'DELETE' || isPurging}
+              className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md transition cursor-pointer disabled:opacity-50"
+            >
+              {isPurging ? 'Deleting...' : 'Confirm Permanent Deletion'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowPurgeModal(false);
+                setPurgeConfirmText('');
+              }}
+              className="px-4 py-2.5 rounded-xl border border-border bg-surface text-secondary hover:text-primary font-bold text-xs transition cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       </Modal>
     </div>

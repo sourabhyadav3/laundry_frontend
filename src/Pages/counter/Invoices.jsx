@@ -12,7 +12,7 @@ const statusOrder = ORDER_STATUSES;
 const PAYMENT_STATUSES = ['Paid', 'Pending', 'Partial'];
 
 const Invoices = () => {
-  const { orders, updateOrderStatus, selectedBranch, updateOrderPaymentStatus, addPayment } = useContext(AdminStateContext);
+  const { orders, catalog, updateOrderStatus, selectedBranch, updateOrderPaymentStatus, addPayment } = useContext(AdminStateContext);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
   
@@ -273,12 +273,25 @@ const Invoices = () => {
             <div className="border-t border-border pt-6">
               <h3 className="mb-4 text-lg font-semibold text-primary">Invoice Items</h3>
               <div className="space-y-3">
-                {activeOrder.itemDetails?.map((item, idx) => (
-                  <div key={idx} className="flex justify-between rounded-lg bg-surface-alt p-3">
-                    <span className="text-primary font-medium">{item.name}</span>
-                    <span className="text-secondary">{item.quantity} x {formatCurrency(item.unitPrice)}</span>
-                  </div>
-                ))}
+                {activeOrder.itemDetails?.map((item, idx) => {
+                  const catalogItem = catalog?.find(
+                    (g) => g.name?.toLowerCase() === item.name?.toLowerCase() || item.name?.toLowerCase().startsWith(g.name?.toLowerCase())
+                  );
+                  const color = item.color || catalogItem?.color || '#3b82f6';
+                  return (
+                    <div key={idx} className="flex justify-between items-center rounded-lg bg-surface-alt p-3">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-3 h-3 rounded-full shrink-0 shadow-xs border border-white/20"
+                          style={{ backgroundColor: color }}
+                          title={`Color: ${color}`}
+                        />
+                        <span className="text-primary font-medium">{item.name}</span>
+                      </div>
+                      <span className="text-secondary font-mono text-xs">{item.quantity} x {formatCurrency(item.unitPrice)}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

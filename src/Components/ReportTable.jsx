@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { FiChevronDown, FiChevronUp, FiDownload, FiSearch } from 'react-icons/fi';
 import { exportToCSV } from '../utils/exportUtils';
 
@@ -17,6 +17,67 @@ const ReportTable = ({
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
   const [page, setPage] = useState(1);
+
+  const topScrollRef = useRef(null);
+  const bottomScrollRef = useRef(null);
+  const tableRef = useRef(null);
+  const [contentWidth, setContentWidth] = useState(0);
+  const [canScroll, setCanScroll] = useState(false);
+  const isSyncingRef = useRef(false);
+
+  const checkScroll = useCallback(() => {
+    if (tableRef.current && bottomScrollRef.current) {
+      const scrollW = tableRef.current.scrollWidth;
+      const clientW = bottomScrollRef.current.clientWidth;
+      setContentWidth(scrollW);
+      setCanScroll(scrollW > clientW + 2);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkScroll();
+    const handleResize = () => checkScroll();
+    window.addEventListener('resize', handleResize);
+
+    let resizeObserver;
+    if (window.ResizeObserver && bottomScrollRef.current) {
+      resizeObserver = new ResizeObserver(() => {
+        checkScroll();
+      });
+      resizeObserver.observe(bottomScrollRef.current);
+      if (tableRef.current) resizeObserver.observe(tableRef.current);
+    }
+
+    const timer = setTimeout(checkScroll, 120);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (resizeObserver) resizeObserver.disconnect();
+      clearTimeout(timer);
+    };
+  }, [data, columns, page, checkScroll]);
+
+  const handleTopScroll = () => {
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
+    if (bottomScrollRef.current && topScrollRef.current) {
+      bottomScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    }
+    requestAnimationFrame(() => {
+      isSyncingRef.current = false;
+    });
+  };
+
+  const handleBottomScroll = () => {
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
+    if (topScrollRef.current && bottomScrollRef.current) {
+      topScrollRef.current.scrollLeft = bottomScrollRef.current.scrollLeft;
+    }
+    requestAnimationFrame(() => {
+      isSyncingRef.current = false;
+    });
+  };
 
   const filtered = useMemo(() => {
     let rows = [...data];
@@ -110,14 +171,30 @@ const ReportTable = ({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full">
+      {/* Top Synchronized Horizontal Scrollbar */}
+      {canScroll && (
+        <div
+          ref={topScrollRef}
+          onScroll={handleTopScroll}
+          className="overflow-x-auto overflow-y-hidden custom-scrollbar-horizontal w-full bg-surface-alt/80 border-b border-border/70 transition-all z-10 select-none py-0.5"
+          style={{ minHeight: '10px', maxHeight: '12px' }}
+        >
+          <div style={{ width: `${contentWidth}px`, height: '1px' }} />
+        </div>
+      )}
+
+      <div
+        ref={bottomScrollRef}
+        onScroll={handleBottomScroll}
+        className="overflow-x-auto custom-scrollbar-horizontal w-full"
+      >
+        <table ref={tableRef} className="min-w-full">
           <thead className="bg-surface-alt">
             <tr>
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className="cursor-pointer px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-muted"
+                  className="cursor-pointer px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-muted whitespace-nowrap"
                   onClick={() => col.sortable !== false && handleSort(col.key)}
                 >
                   <span className="inline-flex items-center gap-1">
@@ -137,7 +214,7 @@ const ReportTable = ({
                     const raw = row[col.key];
                     const value = col.format ? col.format(raw, row) : raw;
                     return (
-                      <td key={col.key} className="px-5 py-4 text-sm text-primary">
+                      <td key={col.key} className="px-5 py-4 text-sm text-primary whitespace-nowrap">
                         {value}
                       </td>
                     );

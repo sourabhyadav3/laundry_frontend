@@ -4,16 +4,19 @@ import { AdminStateContext } from '../../context/AdminStateContext';
 import { useLanguage } from '../../context/LanguageContext';
 import ReusableTable from '../../Components/ReusableTable';
 import Modal from '../../Components/Modal';
+import PaymentSettleModal from '../../Components/PaymentSettleModal';
 import { toast } from 'react-toastify';
-import { exportToCSV, formatCurrency, formatDate, generateSubscriptionReceiptPDF, generateCustomerStatementPDF } from '../../utils/exportUtils';
+import { exportToCSV, formatCurrency, formatDate, generateSubscriptionReceiptPDF, generateCustomerStatementPDF, getCustomerOrders } from '../../utils/exportUtils';
 
 const Customers = () => {
-  const { customers, orders = [], addCustomer, updateCustomer, deleteCustomer, selectedBranch, areas, branches = [] } = useContext(AdminStateContext);
+  const { customers, orders = [], addCustomer, updateCustomer, deleteCustomer, settleCustomerBalance, selectedBranch, areas, branches = [] } = useContext(AdminStateContext);
   const { tr } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [showSettleModal, setShowSettleModal] = useState(false);
+  const [settleTargetCustomer, setSettleTargetCustomer] = useState(null);
   const [showFormModal, setShowFormModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState(null);
@@ -99,6 +102,7 @@ const Customers = () => {
       lastInvoiceDate: '',
       freeBalance: '0',
       freeTotal: '0',
+      inactiveReason: '',
     });
     setIsEditing(false);
     setShowFormModal(true);
@@ -126,6 +130,8 @@ const Customers = () => {
       lastInvoiceDate: '',
       freeBalance: '0',
       freeTotal: '0',
+      status: customer.status || 'Active',
+      inactiveReason: customer.inactiveReason || '',
       ...customer,
       isSubscriber: customer.isSubscriber === true || (customer.isSubscriber !== false && Number(customer.insuranceAmount || 0) >= 20),
       englishName: customer.englishName || customer.name || '',
@@ -154,6 +160,11 @@ const Customers = () => {
   };
 
   const handleSaveCustomer = () => {
+    if (formData.status === 'Inactive' && !String(formData.inactiveReason || '').trim()) {
+      toast.error(tr('Please provide a reason for inactivating this customer account'));
+      return;
+    }
+
     const updatedName = formData.englishName || formData.name || formData.arabicName || 'Unnamed';
     const updatedPhone = formData.phones[0] || formData.phone || '';
 
@@ -352,7 +363,7 @@ const Customers = () => {
   };
 
   const tableColumns = [
-    { header: 'Customer ID', accessor: 'customerNo', cell: (row) => row.customerNo || row.displayId || row.id },
+    { header: 'Customer ID', accessor: 'customerNo', cell: (row) => { const rawId = row.id; const validId = rawId && String(rawId) !== 'Auto-generated' ? rawId : null; return row.customerNo || row.displayId || validId || row._id || 'N/A'; } },
     {
       header: 'Name',
       accessor: 'name',
@@ -379,10 +390,18 @@ const Customers = () => {
       header: 'Status',
       accessor: 'status',
       cell: (row) => {
-        const statusClass = row.status === 'Active'
+        const isInactive = row.status === 'Inactive';
+        const statusClass = !isInactive
           ? 'status-pill bg-emerald-500/10 text-emerald-600 border-emerald-500/15'
-          : 'status-pill bg-red-500/10 text-red-600 border-red-500/15';
-        return <span className={statusClass}>{tr(row.status)}</span>;
+          : 'status-pill bg-red-500/10 text-red-600 border-red-500/15 cursor-help';
+        return (
+          <span
+            className={statusClass}
+            title={isInactive ? `${tr('Reason')}: ${row.inactiveReason || tr('No reason specified')}` : ''}
+          >
+            {tr(row.status || 'Active')}
+          </span>
+        );
       },
     },
     {
@@ -500,19 +519,7 @@ const Customers = () => {
         size="2xl"
       >
         {selectedCustomer && (() => {
-          const cId = String(selectedCustomer.id || selectedCustomer._id || selectedCustomer.customerNo || selectedCustomer.displayId || '');
-          const cName = (selectedCustomer.englishName || selectedCustomer.name || '').trim().toLowerCase();
-          const cPhone = (selectedCustomer.phone || '').trim();
-
-          const customerOrders = orders.filter(o => {
-            const oCustId = String(o.customerId || '');
-            const oCustName = (o.customerName || o.customer || '').trim().toLowerCase();
-            const oCustPhone = (o.phone || o.customerPhone || '').trim();
-            if (cId && oCustId && oCustId === cId) return true;
-            if (cPhone && oCustPhone && oCustPhone === cPhone) return true;
-            if (cName && oCustName && oCustName === cName) return true;
-            return false;
-          }).sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
+          const customerOrders = getCustomerOrders(selectedCustomer, orders);
 
           const totalItemsIssued = customerOrders.reduce((sum, o) => {
             if (o.itemDetails && Array.isArray(o.itemDetails)) {
@@ -582,6 +589,32 @@ const Customers = () => {
 
           return (
             <div className="space-y-6">
+              {/* Inactive Account Alert Banner */}
+              {selectedCustomer.status === 'Inactive' && (
+                <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-3 shadow-xs">
+                  <span className="text-2xl select-none">🛑</span>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-bold text-rose-500">
+                        {tr('Customer Account Inactive / حساب العميل موقوف')}
+                      </h4>
+                      <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-rose-500/20 text-rose-600 font-black">
+                        {tr('BLOCKED')}
+                      </span>
+                    </div>
+                    <p className="text-xs text-primary font-semibold mt-1">
+                      <span className="text-secondary">{tr('Reason / سبب إيقاف الحساب:')} </span>
+                      <span className="text-rose-600 dark:text-rose-400 font-bold">
+                        {selectedCustomer.inactiveReason || tr('No reason specified')}
+                      </span>
+                    </p>
+                    <p className="text-[10px] text-secondary mt-0.5">
+                      {tr('Invoices and orders cannot be created for this customer until reactivated.')}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Customer Identity */}
               <div>
                 <h4 className="text-sm font-semibold uppercase tracking-wider text-secondary mb-3 border-b border-border pb-1">Customer Identity</h4>
@@ -662,7 +695,7 @@ const Customers = () => {
                   </div>
                   <button
                     type="button"
-                    onClick={() => generateCustomerStatementPDF(selectedCustomer, customerOrders, customerStats)}
+                    onClick={() => generateCustomerStatementPDF(selectedCustomer, customerOrders, customerStats, { branchName: selectedBranch !== 'All' ? selectedBranch : undefined })}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white text-xs font-bold transition-all border border-blue-500/20"
                     title={tr('Print Account Statement')}
                   >
@@ -689,19 +722,34 @@ const Customers = () => {
                   </div>
 
                   {/* Total Due */}
-                  <div className="rounded-xl border border-border bg-surface p-3 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-secondary">
-                        {tr('Outstanding Due')}
-                      </span>
-                      <span className="text-sm select-none">💰</span>
+                  <div className="rounded-xl border border-border bg-surface p-3 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-secondary">
+                          {tr('Outstanding Due')}
+                        </span>
+                        <span className="text-sm select-none">💰</span>
+                      </div>
+                      <p className={`mt-1.5 text-lg font-black font-mono ${totalDue > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
+                        {formatCurrency(totalDue)}
+                      </p>
+                      <p className="text-[10px] text-secondary mt-0.5">
+                        {totalDue > 0 ? tr('Unpaid balance') : tr('All settled')}
+                      </p>
                     </div>
-                    <p className={`mt-1.5 text-lg font-black font-mono ${totalDue > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
-                      {formatCurrency(totalDue)}
-                    </p>
-                    <p className="text-[10px] text-secondary mt-0.5">
-                      {totalDue > 0 ? tr('Unpaid balance') : tr('All settled')}
-                    </p>
+                    {totalDue > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSettleTargetCustomer(selectedCustomer);
+                          setShowSettleModal(true);
+                        }}
+                        className="mt-2 w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 shadow-xs cursor-pointer"
+                      >
+                        <span>💳</span>
+                        <span>{tr('Pay Balance / تسديد')}</span>
+                      </button>
+                    )}
                   </div>
 
                   {/* 1 Month (30d) Spend */}
@@ -789,9 +837,23 @@ const Customers = () => {
 
               {/* Actions */}
               <div className="border-t border-border pt-6 flex flex-wrap gap-3">
+                {totalDue > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettleTargetCustomer(selectedCustomer);
+                      setShowSettleModal(true);
+                    }}
+                    className="flex-1 min-w-[180px] rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
+                    title={tr('Pay Outstanding Balance')}
+                  >
+                    <span className="text-base select-none">💳</span>
+                    <span>{tr('Pay Outstanding Balance')}</span>
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => generateCustomerStatementPDF(selectedCustomer, customerOrders, customerStats)}
+                  onClick={() => generateCustomerStatementPDF(selectedCustomer, customerOrders, customerStats, { branchName: selectedBranch !== 'All' ? selectedBranch : undefined })}
                   className="flex-1 min-w-[180px] rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 shadow-md transition flex items-center justify-center gap-2"
                   title={tr('Print Customer Statement')}
                 >
@@ -1119,17 +1181,53 @@ const Customers = () => {
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-secondary uppercase">Status</label>
+                  <label className="block text-xs font-semibold text-secondary uppercase">{tr('Status')}</label>
                   <select
                     name="status"
                     value={formData.status || 'Active'}
                     onChange={handleFormChange}
-                    className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-primary focus:outline-none focus:ring-2 focus:ring-blue-400/40 text-sm"
+                    className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-primary focus:outline-none focus:ring-2 focus:ring-blue-400/40 text-sm cursor-pointer"
                   >
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
+                    <option value="Active">Active / نشط</option>
+                    <option value="Inactive">Inactive / غير نشط</option>
                   </select>
                 </div>
+
+                {formData.status === 'Inactive' && (
+                  <div className="col-span-2 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 space-y-2.5">
+                    <label className="block text-xs font-bold text-rose-500 uppercase flex items-center gap-1.5">
+                      <span>⚠️</span>
+                      <span>{tr('Reason for Inactivation / سبب إيقاف الحساب')} *</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="inactiveReason"
+                      required
+                      placeholder={tr('Enter reason e.g. Customer request, unpaid dues, moved out...')}
+                      value={formData.inactiveReason || ''}
+                      onChange={handleFormChange}
+                      className="w-full rounded-lg border border-rose-500/40 bg-surface px-3 py-2 text-primary focus:outline-none focus:ring-2 focus:ring-rose-500 text-sm"
+                    />
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="text-[10px] text-secondary font-semibold">{tr('Quick presets:')}</span>
+                      {[
+                        'Customer requested cancellation / طلب العميل',
+                        'Unpaid outstanding dues / عدم سداد مستحقات',
+                        'Account suspended / إيقاف الحساب مؤقتاً',
+                        'Address changed or moved / تغيير العنوان أو الانتقال'
+                      ].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, inactiveReason: preset }))}
+                          className="px-2 py-1 text-[10px] font-medium rounded-md border border-rose-500/30 bg-surface text-secondary hover:text-rose-500 hover:border-rose-500 transition cursor-pointer"
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="col-span-2">
                   <label className="block text-xs font-semibold text-secondary uppercase">General Notes</label>
                   <input
@@ -1193,6 +1291,26 @@ const Customers = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Settle Outstanding Balance Modal */}
+      <PaymentSettleModal
+        isOpen={showSettleModal}
+        onClose={() => {
+          setShowSettleModal(false);
+          setSettleTargetCustomer(null);
+        }}
+        customer={settleTargetCustomer}
+        customerOrders={getCustomerOrders(settleTargetCustomer, orders)}
+        selectedBranch={selectedBranch}
+        branches={branches}
+        onSettleSuccess={async (custId, payload) => {
+          const res = await settleCustomerBalance(custId, payload);
+          if (res && res.customer) {
+            setSelectedCustomer(res.customer);
+          }
+          return res;
+        }}
+      />
     </div>
   );
 };

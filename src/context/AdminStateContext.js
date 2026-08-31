@@ -236,7 +236,10 @@ export const AdminStateProvider = ({ children }) => {
     
     fetchResource('/branches', (data) => {
       setBranches(data);
-      localStorage.setItem('branches_list', JSON.stringify(data));
+      if (Array.isArray(data)) {
+        window.__cachedBranches = data;
+        localStorage.setItem('branches_list', JSON.stringify(data));
+      }
     });
     
     fetchResource('/notifications', setNotifications);
@@ -720,14 +723,15 @@ export const AdminStateProvider = ({ children }) => {
     }
   };
 
-  const settleCustomerBalance = async (customerId, paymentMethod) => {
+  const settleCustomerBalance = async (customerId, paymentOptions = {}) => {
     try {
-      await api.post(`/customers/${customerId}/settle`, { method: paymentMethod });
+      const payload = typeof paymentOptions === 'string' ? { method: paymentOptions } : paymentOptions;
+      const res = await api.post(`/customers/${customerId}/settle`, payload);
       await fetchData();
-      return true;
+      return res.data;
     } catch (e) {
       toast.error(e.response?.data?.message || 'Failed to settle customer balance');
-      return false;
+      return null;
     }
   };
 

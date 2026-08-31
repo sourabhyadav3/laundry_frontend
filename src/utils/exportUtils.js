@@ -395,82 +395,118 @@ const translateService = (service) => {
   return { en: s, ar: s };
 };
 
-const translateBranch = (branchIdOrName) => {
-  if (!branchIdOrName) return { en: 'Main Branch', ar: 'الفرع الرئيسي' };
-  const rawId = String(branchIdOrName).trim();
-  const branchName = rawId.toLowerCase();
+export const translateBranch = (branchIdOrName) => {
+  if (!branchIdOrName || String(branchIdOrName).trim().toLowerCase() === 'all') {
+    try {
+      const u = JSON.parse(localStorage.getItem('user') || '{}');
+      if (u.branchName) return { en: u.branchName, ar: u.branchNameAr || '' };
+      if (u.branch && u.branch !== 'All') return translateBranch(u.branch);
+    } catch(e) {}
+    return { en: 'Main Branch', ar: 'الفرع الرئيسي' };
+  }
 
-  // 1. Try to find in localStorage cached branches
+  const rawId = String(branchIdOrName).trim();
+  const lowerQuery = rawId.toLowerCase();
+
+  // 1. Gather all cached branches from window and localStorage
+  let allBranches = [];
+  try {
+    if (typeof window !== 'undefined' && Array.isArray(window.__cachedBranches) && window.__cachedBranches.length > 0) {
+      allBranches = allBranches.concat(window.__cachedBranches);
+    }
+  } catch (e) {}
+
   try {
     const cached = localStorage.getItem('branches_list');
     if (cached) {
       const list = JSON.parse(cached);
-      if (Array.isArray(list)) {
-        const found = list.find(b => 
-          String(b.id || b._id || '').toLowerCase() === branchName ||
-          String(b.name || '').toLowerCase() === branchName
-        );
-        if (found) {
-          const nameLower = String(found.name).toLowerCase();
-          if (found.nameAr && /[\u0600-\u06FF]/.test(found.nameAr)) {
-            return { en: found.name, ar: found.nameAr };
-          }
-          if (nameLower.includes('home') || nameLower.includes('service')) {
-            return { en: 'Home Services', ar: 'خدمة المنازل' };
-          }
-          if (nameLower.includes('ragheey') || nameLower.includes('rigai')) {
-            return { en: found.name, ar: 'الرقعي' };
-          }
-          if (nameLower.includes('mishrif')) {
-            return { en: found.name, ar: 'مشرف' };
-          }
-          if (nameLower.includes('andalus')) {
-            return { en: found.name, ar: 'الأندلس' };
-          }
-          if (nameLower.includes('ardiya')) {
-            return { en: found.name, ar: 'العارضية' };
-          }
-          if (nameLower.includes('khaitan')) {
-            return { en: found.name, ar: 'خيطان' };
-          }
-          if (nameLower.includes('qurain')) {
-            return { en: found.name, ar: 'القرين' };
-          }
-          if (nameLower.includes('jahra')) {
-            return { en: found.name, ar: 'الجهراء' };
-          }
-          if (nameLower.includes('main') || nameLower.includes('head')) {
-            return { en: found.name, ar: 'الفرع الرئيسي' };
-          }
-          if (nameLower.includes('salmiya')) return { en: found.name, ar: 'السالمية' };
-          if (nameLower.includes('hawally')) return { en: found.name, ar: 'حولي' };
-          if (nameLower.includes('farwaniya')) return { en: found.name, ar: 'الفروانية' };
-          if (nameLower.includes('mahboula')) return { en: found.name, ar: 'المهبولة' };
-          if (nameLower.includes('fahaheel')) return { en: found.name, ar: 'الفحيحيل' };
-          if (nameLower.includes('mangaf')) return { en: found.name, ar: 'المنقف' };
-          return { en: found.name, ar: '' };
-        }
-      }
+      if (Array.isArray(list)) allBranches = allBranches.concat(list);
     }
-  } catch (e) {
-    console.error('Error looking up branch from localStorage:', e);
+  } catch (e) {}
+
+  try {
+    const cached2 = localStorage.getItem('branches');
+    if (cached2) {
+      const list2 = JSON.parse(cached2);
+      if (Array.isArray(list2)) allBranches = allBranches.concat(list2);
+    }
+  } catch (e) {}
+
+  if (allBranches.length > 0) {
+    const found = allBranches.find(b => {
+      if (!b) return false;
+      const bId = String(b.id || b._id || '').toLowerCase();
+      const bBranchId = String(b.branchId || '').toLowerCase();
+      const bCode = String(b.code || '').toLowerCase();
+      const bName = String(b.name || '').toLowerCase();
+      const bNameAr = String(b.nameAr || b.arabicName || '').toLowerCase();
+
+      return bId === lowerQuery ||
+             bBranchId === lowerQuery ||
+             bCode === lowerQuery ||
+             bName === lowerQuery ||
+             bNameAr === lowerQuery;
+    });
+
+    if (found && found.name) {
+      let enName = String(found.name).trim();
+      let arName = String(found.nameAr || found.arabicName || '').trim();
+
+      if (!arName || !/[\u0600-\u06FF]/.test(arName)) {
+        const enLower = enName.toLowerCase();
+        if (enLower.includes('mishrif')) arName = 'مشرف';
+        else if (enLower.includes('ragheey') || enLower.includes('rigai')) arName = 'الرقعي';
+        else if (enLower.includes('andalus')) arName = 'الأندلس';
+        else if (enLower.includes('ardiya')) arName = 'العارضية';
+        else if (enLower.includes('khaitan')) arName = 'خيطان';
+        else if (enLower.includes('qurain')) arName = 'القرين';
+        else if (enLower.includes('jahra')) arName = 'الجهراء';
+        else if (enLower.includes('salmiya')) arName = 'السالمية';
+        else if (enLower.includes('hawally')) arName = 'حولي';
+        else if (enLower.includes('farwaniya')) arName = 'الفروانية';
+        else if (enLower.includes('mahboula')) arName = 'المهبولة';
+        else if (enLower.includes('fahaheel')) arName = 'الفحيحيل';
+        else if (enLower.includes('mangaf')) arName = 'المنقف';
+        else if (enLower.includes('bayan')) arName = 'بيان';
+        else if (enLower.includes('jabriya')) arName = 'الجابرية';
+        else if (enLower.includes('home') || enLower.includes('service')) arName = 'خدمة المنازل';
+        else if (enLower.includes('main') || enLower.includes('head')) arName = 'الفرع الرئيسي';
+      }
+
+      return { en: enName, ar: arName || '' };
+    }
   }
 
-  // 2. Direct database seeded ObjectId mapping or code mapping
-  if (branchName.includes('home') || branchName.includes('service')) return { en: 'Home Services', ar: 'خدمة المنازل' };
-  if (branchName.includes('main') || branchName.includes('head')) return { en: 'Main Branch', ar: 'الفرع الرئيسي' };
-  if (branchName === '6a3cf82764fc882a198272c5' || branchName.includes('ragheey') || branchName === '1') return { en: 'Ragheey', ar: 'الرقعي' };
-  if (branchName === '6a3cf82764fc882a198272c6' || branchName.includes('mishrif') || branchName === '2') return { en: 'Mishrif', ar: 'مشرف' };
-  if (branchName === '6a3cf82764fc882a198272c7' || branchName.includes('andalus') || branchName === '3') return { en: 'Andalus', ar: 'الأندلس' };
-  if (branchName.includes('ardiya') || branchName === '4') return { en: 'Ardiya', ar: 'العارضية' };
-  if (branchName.includes('khaitan') || branchName === '5') return { en: 'Khaitan', ar: 'خيطان' };
-  if (branchName.includes('qurain') || branchName === '6') return { en: 'Qurain', ar: 'القرين' };
-  if (branchName.includes('jahra') || branchName === '7') return { en: 'Jahra', ar: 'الجهراء' };
-  if (branchName === '6a3d01028b85970b21c6dc45' || branchName.includes('rigai') || branchName === '8') return { en: 'Rigai', ar: 'الرقعي' };
-  if (branchName.includes('salmiya')) return { en: 'Salmiya', ar: 'السالمية' };
-  if (branchName.includes('hawally')) return { en: 'Hawally', ar: 'حولي' };
-  if (branchName.includes('farwaniya')) return { en: 'Farwaniya', ar: 'الفروانية' };
+  // 2. Standard known branch mappings by keywords
+  if (lowerQuery.includes('home') || lowerQuery.includes('service')) return { en: 'Home Services', ar: 'خدمة المنازل' };
+  if (lowerQuery.includes('main') || lowerQuery.includes('head')) return { en: 'Main Branch', ar: 'الفرع الرئيسي' };
+  if (lowerQuery === '6a3cf82764fc882a198272c5' || lowerQuery.includes('ragheey') || lowerQuery === '1') return { en: 'Ragheey', ar: 'الرقعي' };
+  if (lowerQuery === '6a3cf82764fc882a198272c6' || lowerQuery.includes('mishrif') || lowerQuery === '2') return { en: 'Mishrif', ar: 'مشرف' };
+  if (lowerQuery === '6a3cf82764fc882a198272c7' || lowerQuery.includes('andalus') || lowerQuery === '3') return { en: 'Andalus', ar: 'الأندلس' };
+  if (lowerQuery.includes('ardiya') || lowerQuery === '4') return { en: 'Ardiya', ar: 'العارضية' };
+  if (lowerQuery.includes('khaitan') || lowerQuery === '5') return { en: 'Khaitan', ar: 'خيطان' };
+  if (lowerQuery.includes('qurain') || lowerQuery === '6') return { en: 'Qurain', ar: 'القرين' };
+  if (lowerQuery.includes('jahra') || lowerQuery === '7') return { en: 'Jahra', ar: 'الجهراء' };
+  if (lowerQuery === '6a3d01028b85970b21c6dc45' || lowerQuery.includes('rigai') || lowerQuery === '8') return { en: 'Rigai', ar: 'الرقعي' };
+  if (lowerQuery.includes('salmiya')) return { en: 'Salmiya', ar: 'السالمية' };
+  if (lowerQuery.includes('hawally')) return { en: 'Hawally', ar: 'حولي' };
+  if (lowerQuery.includes('farwaniya')) return { en: 'Farwaniya', ar: 'الفروانية' };
+  if (lowerQuery.includes('mahboula')) return { en: 'Mahboula', ar: 'المهبولة' };
+  if (lowerQuery.includes('fahaheel')) return { en: 'Fahaheel', ar: 'الفحيحيل' };
+  if (lowerQuery.includes('mangaf')) return { en: 'Mangaf', ar: 'المنقف' };
+  if (lowerQuery.includes('bayan')) return { en: 'Bayan', ar: 'بيان' };
+  if (lowerQuery.includes('jabriya')) return { en: 'Jabriya', ar: 'الجابرية' };
 
+  // 3. If rawId is a 24-character hexadecimal MongoDB ObjectId that was not found, check logged-in user or default to Mishrif/Main
+  if (/^[0-9a-fA-F]{24}$/.test(rawId)) {
+    try {
+      const u = JSON.parse(localStorage.getItem('user') || '{}');
+      if (u.branchName) return { en: u.branchName, ar: u.branchNameAr || '' };
+    } catch(e) {}
+    return { en: 'Mishrif', ar: 'مشرف' };
+  }
+
+  // 4. Clean text fallback
   const capitalized = rawId.charAt(0).toUpperCase() + rawId.slice(1);
   return { en: capitalized, ar: '' };
 };
@@ -481,6 +517,39 @@ const translatePaymentStatus = (status) => {
   if (s === 'pending') return { en: 'Pending', ar: 'معلق' };
   if (s === 'partial') return { en: 'Partial', ar: 'جزئي' };
   return { en: status, ar: status };
+};
+
+export const getCustomerOrders = (customer, allOrders = []) => {
+  if (!customer || !Array.isArray(allOrders)) return [];
+  const cId = String(customer.id || '');
+  const cMongoId = String(customer._id || '');
+  const cDisplayId = String(customer.displayId || '');
+  const cCustNo = String(customer.customerNo || '');
+  const cName = String(customer.englishName || customer.name || '').trim().toLowerCase();
+  const cPhone = String(customer.phone || (customer.phones && customer.phones[0]) || '').trim();
+  const altPhones = Array.isArray(customer.phones) ? customer.phones.map(p => String(p).trim()).filter(Boolean) : [];
+
+  return allOrders.filter(o => {
+    if (!o) return false;
+    const oCustId = String(o.customerId || '');
+    const oCustMongo = o.customer ? (typeof o.customer === 'object' ? String(o.customer._id || o.customer.id || '') : String(o.customer)) : '';
+    const oCustName = String(o.customerName || (typeof o.customer === 'object' ? o.customer.name : '') || '').trim().toLowerCase();
+    const oPhone = String(o.phone || o.customerPhone || '').trim();
+
+    // 1. Exact ID matches
+    if (cId && (oCustId === cId || oCustMongo === cId)) return true;
+    if (cMongoId && (oCustId === cMongoId || oCustMongo === cMongoId)) return true;
+    if (cDisplayId && (oCustId === cDisplayId || oCustMongo === cDisplayId)) return true;
+    if (cCustNo && (oCustId === cCustNo || oCustMongo === cCustNo)) return true;
+
+    // 2. Phone match
+    if (cPhone && cPhone !== 'N/A' && oPhone && (oPhone === cPhone || altPhones.includes(oPhone))) return true;
+
+    // 3. Name match
+    if (cName && cName !== 'valued customer' && cName !== 'n/a' && oCustName && oCustName === cName) return true;
+
+    return false;
+  }).sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
 };
 
 const getDeliveryTypeLabel = (order) => {
@@ -541,6 +610,7 @@ export const cacheReceiptSnapshot = (order) => {
 };
 
 export const getReceiptUrl = (invoiceNumber, order) => {
+  const finalNum = order?.number || invoiceNumber || 'INV';
   let base = window.location.origin;
   try {
     const stored = localStorage.getItem('spinclean-settings');
@@ -553,40 +623,10 @@ export const getReceiptUrl = (invoiceNumber, order) => {
   } catch (e) {
     // use current origin
   }
-  let url = `${base}/receipt/${encodeURIComponent(invoiceNumber)}`;
-  // Embed order data in query string so any device scanning the QR sees real data
   if (order) {
-    try {
-      const slim = {
-        number: order.number,
-        date: order.date,
-        customerName: order.customerName,
-        staffName: order.staffName || order.createdBy,
-        serviceType: order.serviceType,
-        paymentStatus: order.paymentStatus,
-        branchId: order.branchId || order.branch,
-        amount: order.amount,
-        discount: order.discount,
-        tax: order.tax,
-        taxRate: order.taxRate,
-        totalAmount: order.totalAmount,
-        deliveryType: order.deliveryType,
-        deliveryStatus: order.deliveryStatus || order.status,
-        itemDetails: (order.itemDetails || []).map(it => ({
-          name: it.name,
-          quantity: it.quantity,
-          unitPrice: it.unitPrice,
-          notes: it.notes,
-        })),
-      };
-      const json = JSON.stringify(slim);
-      const encoded = btoa(unescape(encodeURIComponent(json)));
-      url += `?d=${encodeURIComponent(encoded)}`;
-    } catch (e) {
-      console.error('Failed to embed order data in receipt URL', e);
-    }
+    cacheReceiptSnapshot(order);
   }
-  return url;
+  return `${base}/receipt/${encodeURIComponent(finalNum)}`;
 };
 
 export const decodeReceiptData = (search, hash) => {
@@ -597,10 +637,14 @@ export const decodeReceiptData = (search, hash) => {
       encoded = params.get('d');
     }
     if (!encoded && hash) {
-      const match = hash.match(/d=(.+)/);
+      const match = hash.match(/[?&]d=([^&]+)/) || hash.match(/d=(.+)/);
       if (match) {
         encoded = match[1];
       }
+    }
+    if (!encoded && typeof window !== 'undefined' && window.location) {
+      const allParams = new URLSearchParams(window.location.search);
+      encoded = allParams.get('d');
     }
     if (!encoded) return null;
     const decodedB64 = decodeURIComponent(encoded);
@@ -724,6 +768,9 @@ export const getExpectedDeliveryInfo = (order) => {
   
   const clockMatch = estimatedTime.match(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/);
   const ampmMatch = estimatedTime.match(/^([0-1]?[0-9]):([0-5][0-9])\s*(AM|PM|am|pm)$/i);
+  const dayMatch = estimatedTime.toLowerCase().includes('day') || estimatedTime.includes('يوم') || estimatedTime.includes('أيام');
+  const pureNumMatch = estimatedTime.match(/^\s*(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hours?|ساعة|ساعات)?\s*$/i);
+  const hourMatch = estimatedTime.toLowerCase().includes('hour') || estimatedTime.includes('ساعة') || estimatedTime.includes('ساعات');
 
   if (clockMatch) {
     let hours = parseInt(clockMatch[1], 10);
@@ -741,16 +788,18 @@ export const getExpectedDeliveryInfo = (order) => {
     const periodAr = period === 'PM' ? 'م' : 'ص';
     estTimeEn = `${hours}:${minutes} ${period}`;
     estTimeAr = `${hours}:${minutes} ${periodAr}`;
-  } else if (estimatedTime.toLowerCase().includes('hour')) {
-    const num = estimatedTime.replace(/[^0-9]/g, '');
-    const isSingle = num === '1';
-    estTimeEn = num ? (isSingle ? 'After 1 Hour' : `After ${num} Hours`) : (estimatedTime.toLowerCase().startsWith('after') ? estimatedTime : `After ${estimatedTime}`);
-    estTimeAr = num ? (isSingle ? 'بعد 1 ساعة' : `بعد ${num} ساعات`) : (estimatedTime.startsWith('بعد') ? estimatedTime : `بعد ${estimatedTime}`);
-  } else if (estimatedTime.toLowerCase().includes('day')) {
-    const num = estimatedTime.replace(/[^0-9]/g, '');
-    const isSingle = num === '1';
-    estTimeEn = num ? (isSingle ? 'After 1 Day' : `After ${num} Days`) : (estimatedTime.toLowerCase().startsWith('after') ? estimatedTime : `After ${estimatedTime}`);
-    estTimeAr = num ? (isSingle ? 'بعد 1 يوم' : `بعد ${num} أيام`) : (estimatedTime.startsWith('بعد') ? estimatedTime : `بعد ${estimatedTime}`);
+  } else if (dayMatch) {
+    const num = estimatedTime.replace(/[^0-9.]/g, '');
+    const numVal = parseFloat(num);
+    const isSingle = numVal === 1;
+    estTimeEn = numVal ? (isSingle ? 'After 1 Day' : `After ${numVal} Days`) : (estimatedTime.toLowerCase().startsWith('after') ? estimatedTime : `After ${estimatedTime}`);
+    estTimeAr = numVal ? (isSingle ? 'بعد 1 يوم' : `بعد ${numVal} أيام`) : (estimatedTime.startsWith('بعد') ? estimatedTime : `بعد ${estimatedTime}`);
+  } else if (pureNumMatch || hourMatch) {
+    const num = estimatedTime.replace(/[^0-9.]/g, '');
+    const numVal = parseFloat(num);
+    const isSingle = numVal === 1;
+    estTimeEn = numVal ? (isSingle ? 'After 1 Hour' : `After ${numVal} Hours`) : (estimatedTime.toLowerCase().startsWith('after') ? estimatedTime : `After ${estimatedTime}`);
+    estTimeAr = numVal ? (isSingle ? 'بعد 1 ساعة' : `بعد ${numVal} ساعات`) : (estimatedTime.startsWith('بعد') ? estimatedTime : `بعد ${estimatedTime}`);
   } else {
     estTimeEn = estimatedTime;
     estTimeAr = estimatedTime;
@@ -762,12 +811,12 @@ export const getExpectedDeliveryInfo = (order) => {
   if (isHome && !dateStr) {
     const baseDate = order?.date ? new Date(order.date) : new Date();
     let hoursToAdd = 24;
-    if (estimatedTime.toLowerCase().includes('hour')) {
-      const parsedHours = parseInt(estimatedTime, 10);
-      if (!isNaN(parsedHours)) hoursToAdd = parsedHours;
-    } else if (estimatedTime.toLowerCase().includes('day')) {
-      const parsedDays = parseInt(estimatedTime, 10);
-      if (!isNaN(parsedDays)) hoursToAdd = parsedDays * 24;
+    if (pureNumMatch || hourMatch || estimatedTime.toLowerCase().includes('hour')) {
+      const parsedHours = parseFloat(estimatedTime.replace(/[^0-9.]/g, ''));
+      if (!isNaN(parsedHours) && parsedHours > 0) hoursToAdd = parsedHours;
+    } else if (dayMatch || estimatedTime.toLowerCase().includes('day')) {
+      const parsedDays = parseFloat(estimatedTime.replace(/[^0-9.]/g, ''));
+      if (!isNaN(parsedDays) && parsedDays > 0) hoursToAdd = parsedDays * 24;
     } else {
       hoursToAdd = isExpress ? 2 : 24;
     }
@@ -793,12 +842,26 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
     (c) =>
       c.id === order?.customerId ||
       c._id === order?.customerId ||
-      c.name?.toLowerCase() === order?.customerName?.toLowerCase()
+      (order?.customerId && (String(c.id) === String(order.customerId) || String(c._id) === String(order.customerId))) ||
+      (c.name && order?.customerName && c.name.toLowerCase() === order.customerName.toLowerCase())
   );
 
-  const customerIdStr = customerObj
-    ? (customerObj.customerNo || `CUST-${String(customerObj.displayId || '').padStart(4, '0')}`)
-    : 'N/A';
+  let rawCustNo = customerObj?.customerNo || order?.customerNo;
+  let rawCustId = customerObj?.id || order?.customerId;
+  let rawDisplayId = customerObj?.displayId || order?.displayId;
+  let rawDbId = customerObj?._id || order?._id;
+
+  let customerIdStr = 'N/A';
+  if (rawCustNo && rawCustNo !== 'Auto-generated') {
+    customerIdStr = rawCustNo;
+  } else if (rawDisplayId) {
+    customerIdStr = `CUST-${String(rawDisplayId).padStart(4, '0')}`;
+  } else if (rawCustId && rawCustId !== 'Auto-generated') {
+    customerIdStr = rawCustId;
+  } else if (rawDbId && rawDbId !== 'Auto-generated') {
+    customerIdStr = rawDbId;
+  }
+
   const customerPhoneStr = customerObj?.phone || order?.contactNumber || 'N/A';
 
   // Calculate total quantity
@@ -846,22 +909,22 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
       itemAr = '';
     }
 
-    const noteHtml = it.notes ? `<div class="item-notes" style="color: #000 !important; font-weight: bold; font-size: 10px; margin-top: 1px;">Note: ${it.notes}</div>` : '';
+    const noteHtml = it.notes ? `<div class="item-notes" style="color: #000 !important; font-weight: bold; font-size: 9px; margin-top: 1px;">Note: ${it.notes}</div>` : '';
     
     return `
       <tr>
-        <td style="padding: 5px 2px; border-bottom: 1.5px dashed #000; text-align: left; vertical-align: middle;">
-          ${itemEn ? `<div class="item-name-en" style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700; font-size: 11px; color: #000; display: block; text-align: left; direction: ltr;">${itemEn}</div>` : ''}
-          ${itemAr ? `<div class="item-name-ar" lang="ar" dir="rtl" style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', Tahoma, sans-serif; font-weight: 700; font-size: 11px; color: #000; display: block; text-align: right; direction: rtl; margin-top: 2px;">${itemAr}</div>` : ''}
+        <td style="padding: 3px 2px; border-bottom: 1px dashed #000; text-align: left; vertical-align: middle;">
+          ${itemEn ? `<div class="item-name-en" style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700; font-size: 10px; color: #000; display: block; text-align: left; direction: ltr; line-height: 1.2;">${itemEn}</div>` : ''}
+          ${itemAr ? `<div class="item-name-ar" lang="ar" dir="rtl" style="font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', Tahoma, sans-serif; font-weight: 700; font-size: 10px; color: #000; display: block; text-align: right; direction: rtl; margin-top: 1px; line-height: 1.2;">${itemAr}</div>` : ''}
           ${noteHtml}
         </td>
-        <td style="padding: 5px 2px; border-bottom: 1.5px dashed #000; text-align: center; vertical-align: middle;" class="item-qty">
+        <td style="padding: 3px 2px; border-bottom: 1px dashed #000; text-align: center; vertical-align: middle;" class="item-qty">
           ${it.quantity}
         </td>
-        <td style="padding: 5px 2px; border-bottom: 1.5px dashed #000; text-align: right; vertical-align: middle;" class="item-price">
+        <td style="padding: 3px 2px; border-bottom: 1px dashed #000; text-align: right; vertical-align: middle;" class="item-price">
           ${formatCurrency(it.unitPrice)}
         </td>
-        <td style="padding: 5px 2px; border-bottom: 1.5px dashed #000; text-align: right; vertical-align: middle;" class="item-total">
+        <td style="padding: 3px 2px; border-bottom: 1px dashed #000; text-align: right; vertical-align: middle;" class="item-total">
           ${formatCurrency(it.quantity * it.unitPrice)}
         </td>
       </tr>
@@ -872,9 +935,9 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
   let discountLine = '';
   if (order?.discount > 0) {
     discountLine = `
-      <div style="display: flex; justify-content: space-between; font-size: 11px; color: #000 !important; font-weight: 700; margin-bottom: 3px;">
-        <span style="font-size: 11px; font-weight: 700;">Discount / الخصم:</span>
-        <span style="font-family: monospace; font-size: 11px; font-weight: 700;">-${formatCurrency(order.discount)}</span>
+      <div style="display: flex; justify-content: space-between; font-size: 10px; color: #000 !important; font-weight: 700; margin-bottom: 2px;">
+        <span style="font-size: 10px; font-weight: 700;">Discount / الخصم:</span>
+        <span style="font-family: monospace; font-size: 10px; font-weight: 700;">-${formatCurrency(order.discount)}</span>
       </div>
     `;
   }
@@ -883,9 +946,9 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
   let taxLine = '';
   if (order?.tax > 0) {
     taxLine = `
-      <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; color: #000 !important; font-weight: 700;">
-        <span style="font-size: 11px; font-weight: 700;">Tax (${order.taxRate || 0}%) / الضريبة (${order.taxRate || 0}%):</span>
-        <span style="font-family: monospace; font-size: 11px; font-weight: 700;">${formatCurrency(order.tax)}</span>
+      <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 2px; color: #000 !important; font-weight: 700;">
+        <span style="font-size: 10px; font-weight: 700;">Tax (${order.taxRate || 0}%) / الضريبة (${order.taxRate || 0}%):</span>
+        <span style="font-family: monospace; font-size: 10px; font-weight: 700;">${formatCurrency(order.tax)}</span>
       </div>
     `;
   }
@@ -898,78 +961,88 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
         <title>Invoice ${order?.number || 'N/A'}</title>
         <style>
           @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@600;700;800&display=swap');
+          * {
+            box-sizing: border-box;
+          }
           @media print {
             @page {
               margin: 0;
-              size: 80mm auto;
+              size: auto;
             }
-            body {
-              margin: 0;
-              padding: 0;
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
               background: #fff !important;
+              height: auto !important;
             }
             .receipt-container {
-              width: 78mm !important;
+              width: 100% !important;
+              max-width: 76mm !important;
               margin: 0 auto !important;
-              padding: 6px !important;
+              padding: 3mm 2mm !important;
               box-shadow: none !important;
-              border: 2px solid #000 !important;
+              border: 1px solid #000 !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+            }
+            * {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
           }
           body {
             font-family: 'Helvetica Neue', Helvetica, Arial, 'Noto Sans Arabic', sans-serif;
             margin: 0;
-            padding: 10px;
+            padding: 6px;
             background-color: #f3f4f6;
             color: #000 !important;
             font-weight: 700 !important;
             -webkit-font-smoothing: antialiased;
           }
           .receipt-container {
-            max-width: 340px;
+            max-width: 320px;
             margin: 0 auto;
             background: #fff;
-            padding: 12px;
-            border: 2px solid #000 !important;
+            padding: 8px;
+            border: 1.5px solid #000 !important;
             border-radius: 4px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
           .brand-header {
             text-align: center;
-            margin-bottom: 10px;
-            border-bottom: 3px solid #000;
-            padding-bottom: 6px;
-          }
-          .brand-name {
-            font-size: 18px;
-            font-weight: 800;
-            color: #000 !important;
-            margin: 0;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 4px;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
           .receipt-title {
             text-align: center;
-            font-size: 13px;
+            font-size: 11px;
             font-weight: 800 !important;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-top: 4px;
-            margin-bottom: 8px;
-            border-bottom: 2px solid #000;
-            padding-bottom: 4px;
+            margin-top: 2px;
+            margin-bottom: 2px;
+            border-bottom: 1.5px solid #000;
+            padding-bottom: 2px;
             color: #000 !important;
           }
           .info-section {
-            border-bottom: 2px dashed #000;
-            padding-bottom: 8px;
-            margin-bottom: 8px;
+            border-bottom: 1.5px dashed #000;
+            padding-bottom: 4px;
+            margin-bottom: 4px;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
           .info-row {
             display: flex;
             justify-content: space-between;
-            font-size: 11px;
-            margin-bottom: 3px;
+            font-size: 9.5px;
+            line-height: 1.25;
+            margin-bottom: 2px;
             color: #000 !important;
             font-weight: 700 !important;
           }
@@ -980,21 +1053,21 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
           .info-value {
             font-weight: 700 !important;
             text-align: right;
-            font-size: 11px;
+            font-size: 9.5px;
             color: #000 !important;
           }
           .table-header th {
-            border-bottom: 2.5px solid #000 !important;
-            font-size: 11px;
+            border-bottom: 2px solid #000 !important;
+            font-size: 9.5px;
             font-weight: 800 !important;
-            padding: 4px 2px;
+            padding: 3px 2px;
             text-transform: uppercase;
             color: #000 !important;
           }
           .item-name-en {
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
             font-weight: 700 !important;
-            font-size: 11px;
+            font-size: 10px;
             color: #000 !important;
             display: block;
             text-align: left;
@@ -1002,92 +1075,96 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
           }
           .item-name-ar {
             font-family: 'Noto Sans Arabic', 'Cairo', 'Tajawal', Tahoma, sans-serif;
-            font-size: 11px;
+            font-size: 10px;
             color: #000 !important;
             display: block;
             direction: rtl;
             text-align: right;
             font-weight: 700 !important;
-            margin-top: 2px;
+            margin-top: 1px;
           }
           .item-qty {
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 700 !important;
             color: #000 !important;
           }
           .item-price {
             font-family: monospace;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 700 !important;
             color: #000 !important;
           }
           .item-total {
             font-family: monospace;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 700 !important;
             color: #000 !important;
           }
           .item-notes {
-            font-size: 9px;
+            font-size: 8px;
             color: #000 !important;
             font-style: italic;
             margin-top: 1px;
             font-weight: 700;
           }
           .summary-section {
-            border-top: 2px dashed #000;
-            padding-top: 6px;
-            margin-top: 6px;
+            border-top: 1.5px dashed #000;
+            padding-top: 3px;
+            margin-top: 3px;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
           .total-row {
             display: flex;
             justify-content: space-between;
-            font-size: 15px;
+            font-size: 13px;
             font-weight: 800 !important;
-            border-top: 3px solid #000 !important;
-            border-bottom: 3px solid #000 !important;
-            padding: 6px 0;
-            margin-top: 6px;
+            border-top: 2px solid #000 !important;
+            border-bottom: 2px solid #000 !important;
+            padding: 3px 0;
+            margin-top: 3px;
             color: #000 !important;
           }
           .footer-section {
             text-align: center;
-            font-size: 11px;
+            font-size: 9.5px;
             color: #000 !important;
-            margin-top: 15px;
-            border-top: 2px dashed #000;
-            padding-top: 6px;
+            margin-top: 4px;
+            border-top: 1.5px dashed #000;
+            padding-top: 3px;
             font-weight: 700 !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
         </style>
       </head>
       <body>
         <div class="receipt-container">
-          <div class="brand-header" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 8px;">
+          <div class="brand-header" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 4px;">
             <!-- Top row: English left | Logo center | Arabic right -->
-            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 4px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 2px;">
               <div style="text-align: left; flex: 1;">
-                <div style="font-size: 12px; font-weight: 800; color: #000 !important; line-height: 1.3;">Tuhama Laundry Co.</div>
-                <div style="font-size: 9px; color: #000 !important; line-height: 1.2; font-weight: 700;">Cleaning, Ironing &amp; Wash in K.</div>
+                <div style="font-size: 11px; font-weight: 800; color: #000 !important; line-height: 1.2;">Tuhama Laundry Co.</div>
+                <div style="font-size: 8px; color: #000 !important; line-height: 1.1; font-weight: 700;">Cleaning, Ironing &amp; Wash in K.</div>
               </div>
-              <div style="flex: 0 0 auto; margin: 0 6px;">
-                <img src="${window.location.origin}/logo.png" alt="Tuhama Logo" style="width: 80px; height: 80px; object-fit: contain; border-radius: 12px; display: block; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges;" />
+              <div style="flex: 0 0 auto; margin: 0 4px;">
+                <img src="${window.location.origin}/logo.png" alt="Tuhama Logo" style="width: 50px; height: 50px; object-fit: contain; border-radius: 8px; display: block; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges;" />
               </div>
               <div style="text-align: right; flex: 1; direction: rtl;">
-                <div style="font-size: 13px; font-weight: 800; color: #000 !important; line-height: 1.3;">شركة مصابغ تهامة</div>
-                <div style="font-size: 9px; color: #000 !important; line-height: 1.2; font-weight: 700;">تنظيف وكي وغسيل</div>
+                <div style="font-size: 12px; font-weight: 800; color: #000 !important; line-height: 1.2;">شركة مصابغ تهامة</div>
+                <div style="font-size: 8px; color: #000 !important; line-height: 1.1; font-weight: 700;">تنظيف وكي وغسيل</div>
               </div>
             </div>
             <!-- Phone numbers row -->
-            <div style="display: flex; justify-content: center; gap: 12px; margin-top: 4px; margin-bottom: 4px;">
-              <span style="font-size: 10px; font-weight: 800; color: #000 !important;">Tel: 222 03 222</span>
+            <div style="display: flex; justify-content: center; gap: 8px; margin-top: 2px; margin-bottom: 2px;">
+              <span style="font-size: 9.5px; font-weight: 800; color: #000 !important;">Tel: 222 03 222</span>
             </div>
             <div class="receipt-title">Invoice - فاتورة</div>
           </div>
           
           <div class="info-section">
-            <div style="text-align: center; border: 1.5px solid #000; border-radius: 6px; background-color: #f3f4f6; padding: 6px; margin-bottom: 8px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-              <span style="font-size: 13px; font-weight: 800; color: #000;">Invoice # ${order?.number || 'N/A'}</span>
+            <div style="text-align: center; border: 1.5px solid #000; border-radius: 4px; background-color: #f3f4f6; padding: 4px; margin-bottom: 5px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+              <span style="font-size: 12px; font-weight: 800; color: #000;">Invoice # ${order?.number || 'N/A'}</span>
             </div>
             <div class="info-row">
               <span class="info-label">Date / التاريخ:</span>
@@ -1102,7 +1179,7 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
               <span class="info-value">${order?.customerName || 'N/A'}</span>
             </div>
             ${(customerObj?.isSubscriber || Number(customerObj?.insuranceAmount || 0) >= 20 || order?.isSubscriber) ? `
-            <div class="info-row" style="background-color: #fef08a; padding: 2px 4px; border-radius: 4px; font-weight: 800; border: 1px solid #eab308; margin-bottom: 4px; margin-top: 2px;">
+            <div class="info-row" style="background-color: #fef08a; padding: 2px 4px; border-radius: 4px; font-weight: 800; border: 1px solid #eab308; margin-bottom: 3px; margin-top: 1px;">
               <span class="info-label" style="color: #854d0e !important; font-weight: 800;">Subscriber Status / الاشتراك:</span>
               <span class="info-value" style="color: #854d0e !important; font-weight: 800;">⭐</span>
             </div>
@@ -1123,7 +1200,7 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
               <span class="info-label">Service Type / نوع الخدمة:</span>
               <span class="info-value">
                 ${/express|urgent|مستعجل/i.test(translatedService.en || '')
-                  ? `<span style="background-color: #dc2626; color: #ffffff !important; padding: 2px 6px; border-radius: 4px; font-weight: 800; display: inline-block; letter-spacing: 0.3px;">⚡ ${translatedService.en === translatedService.ar ? translatedService.en : `${translatedService.en} / ${translatedService.ar}`}</span>`
+                  ? `<span style="background-color: #dc2626; color: #ffffff !important; padding: 1px 5px; border-radius: 4px; font-weight: 800; display: inline-block; letter-spacing: 0.3px;">⚡ ${translatedService.en === translatedService.ar ? translatedService.en : `${translatedService.en} / ${translatedService.ar}`}</span>`
                   : (translatedService.en === translatedService.ar ? translatedService.en : `${translatedService.en} / <span style="direction: rtl;">${translatedService.ar}</span>`)}
               </span>
             </div>
@@ -1139,20 +1216,20 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
               <span class="info-label" style="white-space: nowrap; font-weight: 800;">Exp. Delivery / التسليم المتوقع:</span>
               <span class="info-value" style="text-align: right;">
                 ${expectedDeliveryInfo.date ? `${expectedDeliveryInfo.date}<br/>` : ''}
-                <span style="font-size: 10px; font-weight: 700; color: #111;">
+                <span style="font-size: 9.5px; font-weight: 700; color: #111;">
                   ${expectedDeliveryInfo.timeEn === expectedDeliveryInfo.timeAr ? expectedDeliveryInfo.timeEn : `${expectedDeliveryInfo.timeEn} / <span style="direction: rtl;">${expectedDeliveryInfo.timeAr}</span>`}
                 </span>
               </span>
             </div>
           </div>
           
-          <table style="width: 100%; border-collapse: collapse; margin-bottom: 8px;">
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 4px;">
             <thead>
               <tr class="table-header">
-                <th style="width: 50%; text-align: left; padding: 4px 2px;">Item<br><span style="font-size: 10px; font-weight: 800;">الصنف</span></th>
-                <th style="width: 12%; text-align: center; padding: 4px 2px;">Qty<br><span style="font-size: 10px; font-weight: 800;">الكمية</span></th>
-                <th style="width: 18%; text-align: right; padding: 4px 2px;">Price<br><span style="font-size: 10px; font-weight: 800;">السعر</span></th>
-                <th style="width: 20%; text-align: right; padding: 4px 2px;">Total<br><span style="font-size: 10px; font-weight: 800;">الإجمالي</span></th>
+                <th style="width: 50%; text-align: left; padding: 3px 2px;">Item<br><span style="font-size: 9px; font-weight: 800;">الصنف</span></th>
+                <th style="width: 12%; text-align: center; padding: 3px 2px;">Qty<br><span style="font-size: 9px; font-weight: 800;">الكمية</span></th>
+                <th style="width: 18%; text-align: right; padding: 3px 2px;">Price<br><span style="font-size: 9px; font-weight: 800;">السعر</span></th>
+                <th style="width: 20%; text-align: right; padding: 3px 2px;">Total<br><span style="font-size: 9px; font-weight: 800;">الإجمالي</span></th>
               </tr>
             </thead>
             <tbody>
@@ -1161,39 +1238,39 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
           </table>
           
           <div class="summary-section">
-            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; color: #000 !important; font-weight: 700;">
-              <span style="font-size: 11px; font-weight: 700;">Total Qty / إجمالي الكمية:</span>
-              <span style="font-family: monospace; font-size: 11px; font-weight: 700;">${totalQuantity}</span>
+            <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 2px; color: #000 !important; font-weight: 700;">
+              <span style="font-size: 10px; font-weight: 700;">Total Qty / إجمالي الكمية:</span>
+              <span style="font-family: monospace; font-size: 10px; font-weight: 700;">${totalQuantity}</span>
             </div>
-            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; color: #000 !important; font-weight: 700;">
-              <span style="font-size: 11px; font-weight: 700;">Subtotal / المجموع الفرعي:</span>
-              <span style="font-family: monospace; font-size: 11px; font-weight: 700;">${formatCurrency(order?.amount || 0)}</span>
+            <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 2px; color: #000 !important; font-weight: 700;">
+              <span style="font-size: 10px; font-weight: 700;">Subtotal / المجموع الفرعي:</span>
+              <span style="font-family: monospace; font-size: 10px; font-weight: 700;">${formatCurrency(order?.amount || 0)}</span>
             </div>
             ${discountLine}
             ${taxLine}
             <div class="total-row">
-              <span style="font-size: 15px; font-weight: 800;">Total Amount / إجمالي السعر:</span>
-              <span style="font-family: monospace; font-size: 16px; font-weight: 800;">${formatCurrency(displayTotal)}</span>
+              <span style="font-size: 13px; font-weight: 800;">Total Amount / إجمالي السعر:</span>
+              <span style="font-family: monospace; font-size: 14px; font-weight: 800;">${formatCurrency(displayTotal)}</span>
             </div>
-            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 5px; margin-bottom: 3px; color: #000 !important; font-weight: 700;">
-              <span style="font-size: 11px; font-weight: 700;">Paid Amount / المبلغ المدفوع:</span>
-              <span style="font-family: monospace; font-size: 11px; font-weight: 700; color: #059669;">${formatCurrency(paidVal)}</span>
+            <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 3px; margin-bottom: 2px; color: #000 !important; font-weight: 700;">
+              <span style="font-size: 10px; font-weight: 700;">Paid Amount / المبلغ المدفوع:</span>
+              <span style="font-family: monospace; font-size: 10px; font-weight: 700; color: #059669;">${formatCurrency(paidVal)}</span>
             </div>
-            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; color: #000 !important; font-weight: 700;">
-              <span style="font-size: 11px; font-weight: 700;">Remaining Balance / المتبقي:</span>
-              <span style="font-family: monospace; font-size: 11px; font-weight: 700; color: #dc2626;">${formatCurrency(balanceVal)}</span>
+            <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 2px; color: #000 !important; font-weight: 700;">
+              <span style="font-size: 10px; font-weight: 700;">Remaining Balance / المتبقي:</span>
+              <span style="font-family: monospace; font-size: 10px; font-weight: 700; color: #dc2626;">${formatCurrency(balanceVal)}</span>
             </div>
           </div>
           
-          <div style="text-align: center; margin-top: 15px; margin-bottom: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=350x350&ecc=H&qzone=4&data=${encodeURIComponent(receiptUrl)}" alt="Invoice QR" style="width: 140px; height: 140px; display: block; margin: 0 auto 6px auto;" />
-            <div style="font-size: 11px; color: #000 !important; font-weight: 800; line-height: 1.3;">Scan to View Invoice</div>
-            <div style="font-size: 11px; color: #000 !important; direction: rtl; font-weight: 800; line-height: 1.3;">امسح لفتح الفاتورة</div>
+          <div style="text-align: center; margin-top: 6px; margin-bottom: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; page-break-inside: avoid !important; break-inside: avoid !important;">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&ecc=M&qzone=2&data=${encodeURIComponent(receiptUrl)}" alt="Invoice QR" style="width: 85px; height: 85px; display: block; margin: 0 auto 3px auto;" />
+            <div style="font-size: 9.5px; color: #000 !important; font-weight: 800; line-height: 1.2;">Scan to View Invoice</div>
+            <div style="font-size: 9.5px; color: #000 !important; direction: rtl; font-weight: 800; line-height: 1.2;">امسح لفتح الفاتورة</div>
           </div>
           
           <div class="footer-section">
-            <div style="font-weight: 800; margin-bottom: 2px; font-size: 11px; color: #000 !important;">Thank you for choosing Tuhama laundry co.!</div>
-            <div style="direction: rtl; font-weight: 800; font-size: 11px; color: #000 !important;">شكراً لاختياركم تهامة برو!</div>
+            <div style="font-weight: 800; margin-bottom: 1px; font-size: 9.5px; color: #000 !important;">Thank you for choosing Tuhama laundry co.!</div>
+            <div style="direction: rtl; font-weight: 800; font-size: 9.5px; color: #000 !important;">شكراً لاختياركم تهامة برو!</div>
           </div>
         </div>
       </body>
@@ -1273,14 +1350,25 @@ export const generateSubscriptionReceiptPDF = (customer, options = {}) => {
   hours = hours % 12 || 12;
   const currentDateTimeStr = `${day}/${month}/${year} ${pad(hours)}:${minutes} ${ampm}`;
 
-  const receiptNo = options.receiptNo || `SUB-${customer.customerNo || customer.displayId || String(customer.id || '').slice(-4) || '001'}`;
-  const branchName = options.branchName || customer.branchName || 'Main Branch / الفرع الرئيسي';
+  const validCustNo = (customer.customerNo && customer.customerNo !== 'Auto-generated')
+    ? customer.customerNo
+    : (customer.displayId ? customer.displayId : (customer.id && customer.id !== 'Auto-generated' ? customer.id : (customer._id ? String(customer._id).slice(-4) : '001')));
+  const receiptNo = options.receiptNo || `SUB-${validCustNo}`;
+
+  const rawBranch = options.branchName || options.branch || customer.branchName || customer.branch || customer.branchId;
+  const branchObj = translateBranch(rawBranch);
+  const branchName = !branchObj.ar || branchObj.en.toLowerCase() === branchObj.ar.toLowerCase()
+    ? branchObj.en
+    : `${branchObj.en} / ${branchObj.ar}`;
+
   const paymentMethod = options.paymentMethod || 'Cash / نقدي';
 
   const customerName = customer.englishName || customer.name || 'Valued Customer';
   const arabicCustomerName = customer.arabicName || '';
   const customerPhone = customer.phones?.[0] || customer.phone || 'N/A';
-  const customerId = customer.displayId || customer.customerNo || customer.id || 'N/A';
+  const customerId = (customer.customerNo && customer.customerNo !== 'Auto-generated')
+    ? customer.customerNo
+    : (customer.displayId ? customer.displayId : (customer.id && customer.id !== 'Auto-generated' ? customer.id : customer._id || 'N/A'));
 
   const addressParts = [
     customer.areaName ? `Area: ${customer.areaName}` : '',
@@ -1615,7 +1703,15 @@ export const generateCustomerStatementPDF = (customer, customerOrders = [], stat
   const customerName = customer.englishName || customer.name || 'Valued Customer';
   const arabicCustomerName = customer.arabicName || '';
   const customerPhone = customer.phones?.[0] || customer.phone || 'N/A';
-  const customerId = customer.displayId || customer.customerNo || customer.id || 'N/A';
+  const customerId = (customer.customerNo && customer.customerNo !== 'Auto-generated')
+    ? customer.customerNo
+    : (customer.displayId ? customer.displayId : (customer.id && customer.id !== 'Auto-generated' ? customer.id : customer._id || 'N/A'));
+
+  const rawBranch = customer.branchName || customer.branch || customer.branchId;
+  const branchObj = translateBranch(rawBranch);
+  const branchName = !branchObj.ar || branchObj.en.toLowerCase() === branchObj.ar.toLowerCase()
+    ? branchObj.en
+    : `${branchObj.en} / ${branchObj.ar}`;
 
   const addressParts = [
     customer.areaName ? `Area: ${customer.areaName}` : '',
@@ -1824,6 +1920,10 @@ export const generateCustomerStatementPDF = (customer, customerOrders = [], stat
             <div class="info-row">
               <span class="info-label">Statement Date / التاريخ:</span>
               <span class="info-value">${currentDateTimeStr}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Branch / الفرع:</span>
+              <span class="info-value">${branchName}</span>
             </div>
             <div class="info-row">
               <span class="info-label">Customer ID / رقم العميل:</span>
@@ -2131,7 +2231,11 @@ export const generateShiftSettlementPDF = (shiftData, options = {}) => {
   const currentDateTimeStr = `${day}/${month}/${year} ${pad(hours)}:${minutes} ${ampm}`;
 
   const shiftName = shiftData.shift || options.shift || 'All Day / اليوم الكامل';
-  const branchName = options.branchName || 'Main Branch / الفرع الرئيسي';
+  const rawBranch = options.branchName || options.branch || shiftData.branchName || shiftData.branch || shiftData.branchId;
+  const branchObj = translateBranch(rawBranch);
+  const branchName = !branchObj.ar || branchObj.en.toLowerCase() === branchObj.ar.toLowerCase()
+    ? branchObj.en
+    : `${branchObj.en} / ${branchObj.ar}`;
   const staffList = shiftData.staffBreakdown || [];
   const expensesList = shiftData.expensesBreakdown || [];
 
@@ -2465,7 +2569,11 @@ export const generateExpenseReceiptPDF = (expense, options = {}) => {
   hours = hours % 12 || 12;
   const currentDateTimeStr = `${day}/${month}/${year} ${pad(hours)}:${minutes} ${ampm}`;
 
-  const branchName = options.branchName || expense.branchName || 'Main Branch / الفرع الرئيسي';
+  const rawBranch = options.branchName || options.branch || expense.branchName || expense.branch || expense.branchId;
+  const branchObj = translateBranch(rawBranch);
+  const branchName = !branchObj.ar || branchObj.en.toLowerCase() === branchObj.ar.toLowerCase()
+    ? branchObj.en
+    : `${branchObj.en} / ${branchObj.ar}`;
   const voucherNo = expense.id || expense._id ? String(expense.id || expense._id).slice(-8).toUpperCase() : `EXP-${Date.now().toString().slice(-6)}`;
 
   const htmlContent = `
@@ -2949,6 +3057,330 @@ export const generateDailyExpensesSummaryPDF = (expensesList = [], options = {})
       iframe.contentWindow.print();
     } catch (e) {
       console.error('Print daily expense statement error', e);
+    }
+  };
+
+  iframe.onload = () => {
+    const logoImg = iframe.contentWindow.document.querySelector('img[alt="Logo"]');
+    if (logoImg && !logoImg.complete) {
+      logoImg.onload = () => setTimeout(triggerPrint, 150);
+      logoImg.onerror = () => setTimeout(triggerPrint, 150);
+    } else {
+      setTimeout(triggerPrint, 250);
+    }
+  };
+
+  setTimeout(() => {
+    if (document.body.contains(iframe)) {
+      document.body.removeChild(iframe);
+    }
+  }, 10000);
+};
+
+// ==========================================
+// 12. GENERATE PAYMENT / BALANCE SETTLEMENT RECEIPT (Thermal Slip)
+// ==========================================
+export const generateSettlementReceiptPDF = (customer, settlementData = {}, options = {}) => {
+  if (!customer) return;
+
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = '0';
+  document.body.appendChild(iframe);
+
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const day = pad(now.getDate());
+  const month = pad(now.getMonth() + 1);
+  const year = now.getFullYear();
+  let hours = now.getHours();
+  const minutes = pad(now.getMinutes());
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
+  const currentDateTimeStr = `${day}/${month}/${year} ${pad(hours)}:${minutes} ${ampm}`;
+
+  const validCustNo = (customer.customerNo && customer.customerNo !== 'Auto-generated')
+    ? customer.customerNo
+    : (customer.displayId ? customer.displayId : (customer.id && customer.id !== 'Auto-generated' ? customer.id : (customer._id ? String(customer._id).slice(-4) : '001')));
+  const receiptNo = settlementData.receiptNo || settlementData.paymentId || `PAY-${Date.now().toString().slice(-6)}`;
+
+  const rawBranch = options.branchName || options.branch || customer.branchName || customer.branch || customer.branchId;
+  const branchObj = translateBranch(rawBranch);
+  const branchName = !branchObj.ar || branchObj.en.toLowerCase() === branchObj.ar.toLowerCase()
+    ? branchObj.en
+    : `${branchObj.en} / ${branchObj.ar}`;
+
+  const customerName = customer.englishName || customer.name || 'Valued Customer';
+  const arabicCustomerName = customer.arabicName || '';
+  const customerPhone = customer.phones?.[0] || customer.phone || 'N/A';
+  const customerId = validCustNo;
+
+  const totalPaid = Number(settlementData.totalPaid || settlementData.amount || 0);
+  const paymentMethod = settlementData.method || options.method || 'Cash / نقدي';
+  const advanceAdded = Number(settlementData.advanceAdded || 0);
+  const remainingDue = Number(settlementData.newTotalDue !== undefined ? settlementData.newTotalDue : (customer.balance || 0));
+  const settledOrders = settlementData.settledOrders || [];
+
+  const ordersRowsHtml = settledOrders.length > 0 ? settledOrders.map((ord, idx) => `
+    <tr>
+      <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; font-family: monospace; font-weight: 700;">${ord.orderNumber || `Order #${idx + 1}`}</td>
+      <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; text-align: right; font-family: monospace;">${formatCurrency(ord.orderTotal || 0)}</td>
+      <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; text-align: right; font-family: monospace; font-weight: 700; color: #047857;">${formatCurrency(ord.amountApplied || 0)}</td>
+      <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; text-align: right; font-family: monospace; color: ${ord.remainingDue > 0 ? '#b91c1c' : '#047857'}; font-weight: 700;">${formatCurrency(ord.remainingDue || 0)}</td>
+    </tr>
+  `).join('') : `
+    <tr>
+      <td colspan="4" style="padding: 6px 2px; font-size: 9.5px; text-align: center; color: #666;">General Account / Balance Settlement</td>
+    </tr>
+  `;
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <title>Payment Receipt - ${receiptNo}</title>
+        <style>
+          @page {
+            size: auto;
+            margin: 6mm auto;
+          }
+          * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          html, body {
+            margin: 0;
+            padding: 0;
+            background: #fff;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+          }
+          body {
+            font-family: 'Courier New', Courier, monospace, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 11px;
+            color: #000 !important;
+            line-height: 1.35;
+            padding: 4mm 0;
+          }
+          .receipt-container {
+            width: 82mm;
+            max-width: 100%;
+            margin: 0 auto;
+            border: 2px solid #000 !important;
+            border-radius: 8px;
+            padding: 12px;
+            background: #fff;
+          }
+          .brand-header {
+            text-align: center;
+            border-bottom: 2px dashed #000;
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+          }
+          .receipt-title {
+            text-align: center;
+            font-size: 13px;
+            font-weight: 800 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 6px 0 8px 0;
+            padding: 4px 0;
+            background: #000;
+            color: #fff !important;
+            border-radius: 4px;
+          }
+          .info-section {
+            border-bottom: 1.5px dashed #000;
+            padding-bottom: 6px;
+            margin-bottom: 6px;
+          }
+          .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 3px;
+            font-size: 10.5px;
+          }
+          .info-label {
+            font-weight: 600;
+            color: #000 !important;
+            flex: 1;
+          }
+          .info-value {
+            font-weight: 800 !important;
+            text-align: right;
+            color: #000 !important;
+            flex: 1;
+          }
+          .total-box {
+            border: 2px solid #000;
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin: 8px 0;
+            background: #fafafa;
+            text-align: center;
+          }
+          .total-title {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+          }
+          .total-amount {
+            font-size: 18px;
+            font-weight: 900;
+            font-family: monospace;
+            color: #000;
+            margin: 3px 0;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 6px 0;
+          }
+          th {
+            font-size: 9px;
+            font-weight: 800;
+            border-bottom: 1.5px solid #000;
+            padding: 3px 2px;
+          }
+          .footer-section {
+            text-align: center;
+            font-size: 10px;
+            border-top: 1.5px dashed #000;
+            padding-top: 8px;
+            margin-top: 8px;
+            font-weight: 700;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="receipt-container">
+          <!-- Logo & Header -->
+          <div class="brand-header">
+            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 4px;">
+              <div style="text-align: left; flex: 1;">
+                <div style="font-size: 12px; font-weight: 800; line-height: 1.2;">Tuhama Laundry Co.</div>
+                <div style="font-size: 8.5px; font-weight: 700;">Cleaning &amp; Ironing</div>
+              </div>
+              <div style="flex: 0 0 auto; margin: 0 4px;">
+                <img src="${window.location.origin}/logo.png" alt="Logo" style="width: 50px; height: 50px; object-fit: contain; display: block;" />
+              </div>
+              <div style="text-align: right; flex: 1; direction: rtl;">
+                <div style="font-size: 12px; font-weight: 800; line-height: 1.2;">شركة مصابغ تهامة</div>
+                <div style="font-size: 8.5px; font-weight: 700;">تنظيف وكي وغسيل</div>
+              </div>
+            </div>
+            <div style="font-size: 9.5px; font-weight: 700;">Tel: 222 03 222 | خدمة العملاء</div>
+          </div>
+
+          <!-- Receipt Title -->
+          <div class="receipt-title">
+            PAYMENT RECEIPT / سند قبض
+          </div>
+
+          <!-- Meta Info -->
+          <div class="info-section">
+            <div class="info-row">
+              <span class="info-label">Receipt No / رقم السند:</span>
+              <span class="info-value">${receiptNo}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Date &amp; Time / التاريخ والوقت:</span>
+              <span class="info-value">${currentDateTimeStr}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Branch / الفرع:</span>
+              <span class="info-value">${branchName}</span>
+            </div>
+            <div style="border-top: 1px dashed #aaa; margin: 4px 0;"></div>
+            <div class="info-row">
+              <span class="info-label">Customer ID / رقم العميل:</span>
+              <span class="info-value">${customerId}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Customer / العميل:</span>
+              <span class="info-value">${customerName}</span>
+            </div>
+            ${arabicCustomerName ? `
+            <div class="info-row">
+              <span class="info-label">الاسم بالعربي:</span>
+              <span class="info-value" style="direction: rtl;">${arabicCustomerName}</span>
+            </div>` : ''}
+            <div class="info-row">
+              <span class="info-label">Phone / الهاتف:</span>
+              <span class="info-value">${customerPhone}</span>
+            </div>
+          </div>
+
+          <!-- Paid Highlight Box -->
+          <div class="total-box">
+            <div class="total-title">TOTAL AMOUNT PAID / المبلغ المستلم</div>
+            <div class="total-amount">${formatCurrency(totalPaid)}</div>
+            <div style="font-size: 9.5px; font-weight: 700; color: #444;">Payment Method: <b>${paymentMethod}</b></div>
+          </div>
+
+          <!-- Settle Breakdown Table -->
+          ${settledOrders.length > 0 ? `
+          <div style="margin: 6px 0;">
+            <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; margin-bottom: 3px;">Settled Invoices / الفواتير المسددة:</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="text-align: left;">Inv #</th>
+                  <th style="text-align: right;">Total</th>
+                  <th style="text-align: right;">Paid</th>
+                  <th style="text-align: right;">Bal</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${ordersRowsHtml}
+              </tbody>
+            </table>
+          </div>` : ''}
+
+          <!-- Balances Summary -->
+          <div class="info-section" style="border-top: 1.5px dashed #000; padding-top: 6px;">
+            ${advanceAdded > 0 ? `
+            <div class="info-row">
+              <span class="info-label">Advance Credited / رصيد إضافي:</span>
+              <span class="info-value" style="color: #047857;">+ ${formatCurrency(advanceAdded)}</span>
+            </div>` : ''}
+            <div class="info-row" style="font-size: 11px;">
+              <span class="info-label" style="font-weight: 800;">Remaining Due / المتبقي:</span>
+              <span class="info-value" style="color: ${remainingDue > 0 ? '#b91c1c' : '#047857'}; font-size: 12px;">${formatCurrency(remainingDue)}</span>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="footer-section">
+            <div>Thank you for your payment!</div>
+            <div style="direction: rtl; margin-top: 2px;">شكراً لتعاملكم مع شركة مصابغ تهامة!</div>
+            <div style="font-size: 8.5px; color: #777; margin-top: 6px;">Software by SpinClean Laundry Management</div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(htmlContent);
+  doc.close();
+
+  const triggerPrint = () => {
+    try {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    } catch (e) {
+      console.error('Print settlement receipt error', e);
     }
   };
 

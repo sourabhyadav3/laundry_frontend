@@ -42,7 +42,7 @@ const DEFAULT_AREAS = [
 ];
 
 const MakeInvoice = () => {
-  const { customers, orders, addOrder, setCustomers, catalog, setCatalog, selectedBranch, payments, setPayments, services, addCustomer } = useContext(AdminStateContext);
+  const { customers, orders, addOrder, setCustomers, updateCustomer, catalog, setCatalog, selectedBranch, payments, setPayments, services, addCustomer } = useContext(AdminStateContext);
   const navigate = useNavigate();
   const { language, t, tr } = useLanguage();
   const { theme } = useTheme();
@@ -139,6 +139,35 @@ const MakeInvoice = () => {
   const [showQuickAddCustomerModal, setShowQuickAddCustomerModal] = useState(false);
   const [quickCustomerForm, setQuickCustomerForm] = useState(() => getInitialQuickCustomerForm(''));
   const [isSavingQuickCustomer, setIsSavingQuickCustomer] = useState(false);
+
+  // Inactive Customer Alert Modal state
+  const [showInactiveModal, setShowInactiveModal] = useState(false);
+  const [inactiveCustomerData, setInactiveCustomerData] = useState(null);
+
+  const handleReactivateCustomer = async () => {
+    if (!inactiveCustomerData) return;
+    try {
+      const updated = {
+        ...inactiveCustomerData,
+        status: 'Active',
+        inactiveReason: ''
+      };
+      const ok = await updateCustomer(inactiveCustomerData.id, updated);
+      if (ok) {
+        setShowInactiveModal(false);
+        setForm((prev) => ({
+          ...prev,
+          customerId: updated.id,
+          phoneSearch: updated.phone,
+        }));
+        setCustomerSearchQuery('');
+        setShowSearchResults(false);
+        toast.success(language === 'ar' ? 'تم تفعيل حساب العميل بنجاح' : 'Customer account reactivated successfully');
+      }
+    } catch (e) {
+      toast.error('Failed to reactivate customer');
+    }
+  };
 
   const handleOpenQuickAddCustomer = (query = '') => {
     setQuickCustomerForm(getInitialQuickCustomerForm(query));
@@ -372,6 +401,11 @@ const MakeInvoice = () => {
     }
     const match = customers.find((c) => c.phone.includes(form.phoneSearch) || (c.phones && c.phones.some(p => p.includes(form.phoneSearch))));
     if (match) {
+      if (match.status === 'Inactive') {
+        setInactiveCustomerData(match);
+        setShowInactiveModal(true);
+        return;
+      }
       const isCustomDiscount = match.customerLevel === 'Custom Discount';
       const discountVal = isCustomDiscount ? Number(match.customDiscountRate || 0) : Number(match.customerLevel || 0);
       const hasDiscount = discountVal > 0;
@@ -391,6 +425,12 @@ const MakeInvoice = () => {
   };
 
   const handleSelectCustomer = (cust) => {
+    if (!cust) return;
+    if (cust.status === 'Inactive') {
+      setInactiveCustomerData(cust);
+      setShowInactiveModal(true);
+      return;
+    }
     const isCustomDiscount = cust.customerLevel === 'Custom Discount';
     const discountVal = isCustomDiscount ? Number(cust.customDiscountRate || 0) : Number(cust.customerLevel || 0);
     const hasDiscount = discountVal > 0;
@@ -430,6 +470,7 @@ const MakeInvoice = () => {
         service: service,
         quantity: 1,
         unitPrice: g.customPrice !== undefined ? g.customPrice : getGarmentPriceForService(g, service),
+        color: g.color || '#3b82f6',
         notes: modifierNotes,
       },
     ]);
@@ -580,8 +621,15 @@ const MakeInvoice = () => {
   });
 
   const validateInvoice = () => {
-    if (!form.customerId) { toast.error('Please select a customer'); return false; }
-    if (orderItems.length === 0) { toast.error('Add at least one garment'); return false; }
+    if (!form.customerId) { toast.error(language === 'ar' ? 'يرجى اختيار العميل' : 'Please select a customer'); return false; }
+    const customerObj = customers.find((c) => String(c.id) === String(form.customerId));
+    if (customerObj && customerObj.status === 'Inactive') {
+      setInactiveCustomerData(customerObj);
+      setShowInactiveModal(true);
+      toast.error(language === 'ar' ? `حساب العميل موقوف: ${customerObj.inactiveReason || ''}` : `Customer account is inactive: ${customerObj.inactiveReason || ''}`);
+      return false;
+    }
+    if (orderItems.length === 0) { toast.error(language === 'ar' ? 'يرجى إضافة قطعة واحدة على الأقل' : 'Add at least one garment'); return false; }
     return true;
   };
 
@@ -636,6 +684,7 @@ const MakeInvoice = () => {
         quantity: it.quantity,
         unitPrice: it.unitPrice,
         service: it.service,
+        color: it.color || (catalog?.find(c => c.name?.toLowerCase() === it.name?.toLowerCase() || it.name?.toLowerCase().startsWith(c.name?.toLowerCase()))?.color) || '#3b82f6',
         notes: it.notes,
       })),
       notes: form.notes,
@@ -2746,6 +2795,67 @@ const MakeInvoice = () => {
                 className="px-6 py-2.5 rounded-xl font-bold border border-border bg-surface-alt text-secondary hover:text-primary text-xs transition-colors"
               >
                 {language === 'ar' ? 'إلغاء / خروج' : 'Cancel / Exit'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Inactive Customer Warning Popup Modal */}
+      {showInactiveModal && inactiveCustomerData && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-md surface-card rounded-3xl border border-rose-500/40 p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-500 flex items-center justify-center text-2xl font-bold">
+                🛑
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-rose-500">
+                  {language === 'ar' ? 'حساب العميل موقوف / غير نشط' : 'Customer Account is Inactive'}
+                </h3>
+                <p className="text-xs text-secondary">
+                  {language === 'ar' ? 'لا يمكن إنشاء فواتير لحساب غير نشط' : 'Invoices cannot be created for inactive customers'}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-surface-alt border border-border space-y-2 text-sm">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-secondary">{language === 'ar' ? 'اسم العميل:' : 'Customer:'}</span>
+                <span className="font-bold text-primary">{inactiveCustomerData.name || inactiveCustomerData.englishName}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-secondary">{language === 'ar' ? 'رقم الهاتف:' : 'Phone:'}</span>
+                <span className="font-mono text-primary">{inactiveCustomerData.phone}</span>
+              </div>
+              <div className="pt-2 border-t border-border">
+                <span className="text-xs font-bold text-rose-500 block mb-1">
+                  {language === 'ar' ? 'سبب إيقاف الحساب:' : 'Reason for Inactivation:'}
+                </span>
+                <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold bg-rose-500/10 p-3 rounded-xl border border-rose-500/20">
+                  "{inactiveCustomerData.inactiveReason || (language === 'ar' ? 'لم يتم تحديد سبب' : 'No specific reason provided')}"
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowInactiveModal(false);
+                  setInactiveCustomerData(null);
+                }}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-border text-xs font-bold text-secondary hover:text-primary hover:bg-surface-alt transition cursor-pointer"
+              >
+                {language === 'ar' ? 'إلغاء / اختيار عميل آخر' : 'Close / Choose Another'}
+              </button>
+              <button
+                type="button"
+                onClick={handleReactivateCustomer}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition cursor-pointer"
+              >
+                {language === 'ar' ? 'تفعيل العميل والمتابعة' : 'Reactivate & Continue'}
               </button>
             </div>
           </div>

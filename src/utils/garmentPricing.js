@@ -42,9 +42,22 @@ export const parseCatalogPrices = (prices = {}) => ({
 export const hasAnyCatalogPrice = (prices) =>
   Object.values(parseCatalogPrices(prices)).some((v) => v > 0);
 
-/** Legacy single `price` fallback for default catalog items */
+/** Dynamic & legacy service price resolver */
 export const getGarmentPriceForService = (garment, service) => {
   if (!garment) return 0;
+
+  if (garment.prices && typeof garment.prices === 'object') {
+    // 1. Direct match by service name
+    if (garment.prices[service] !== undefined && garment.prices[service] !== '' && Number(garment.prices[service]) > 0) {
+      return Number(garment.prices[service]);
+    }
+    // 2. Case-insensitive / trimmed match
+    const targetService = String(service || '').trim().toLowerCase();
+    const foundKey = Object.keys(garment.prices).find(k => k.trim().toLowerCase() === targetService);
+    if (foundKey && garment.prices[foundKey] !== undefined && garment.prices[foundKey] !== '' && Number(garment.prices[foundKey]) > 0) {
+      return Number(garment.prices[foundKey]);
+    }
+  }
 
   const key = resolveServicePriceKey(service);
   const parsed = parseCatalogPrices(garment.prices);
@@ -56,6 +69,10 @@ export const getGarmentPriceForService = (garment, service) => {
 };
 
 export const getPrimaryCatalogPrice = (prices) => {
+  if (!prices || typeof prices !== 'object') return 0;
+  // Return first available positive price
+  const values = Object.values(prices).map(v => Number(v) || 0).filter(v => v > 0);
+  if (values.length > 0) return values[0];
   const parsed = parseCatalogPrices(prices);
   return (
     parsed.normalWashIron ||

@@ -1,7 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
-import { formatCurrency, getDisplayTotal, getReceiptUrl, findReceiptOrder, decodeReceiptData, getExpectedDeliveryInfo, formatInvoiceDateTime } from '../../utils/exportUtils';
+import axios from 'axios';
+import {
+  formatCurrency,
+  getDisplayTotal,
+  getReceiptUrl,
+  findReceiptOrder,
+  decodeReceiptData,
+  getExpectedDeliveryInfo,
+  formatInvoiceDateTime
+} from '../../utils/exportUtils';
 import { getBilingualGarmentNames } from '../../utils/garmentTranslations';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const translateService = (service) => {
   const s = String(service || 'Iron & Wash').trim();
@@ -122,134 +133,267 @@ const PublicReceipt = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
+    // 1. Instant preview from QR embedded param if available
     const urlData = decodeReceiptData(location.search, location.hash);
-    if (urlData && urlData.number) {
+    if (urlData && (urlData.number || urlData.totalAmount)) {
       setOrder(urlData);
       setLoading(false);
-      return;
     }
-    const foundOrder = findReceiptOrder(id, []);
-    setOrder(foundOrder);
-    setLoading(false);
+
+    // 2. Fetch fresh live invoice data from Backend API
+    const fetchLiveInvoice = async () => {
+      const queryId = id || urlData?.number;
+      if (!queryId) {
+        if (!urlData) setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await axios.get(`${API_BASE_URL}/orders/public/${encodeURIComponent(queryId)}`, {
+          timeout: 6000
+        });
+        if (res.data && isMounted) {
+          setOrder(res.data);
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn('Backend live invoice fetch notice:', err?.message || err);
+      }
+
+      // 3. Fallback to localStorage snapshots if available
+      if (isMounted) {
+        if (!urlData) {
+          const foundOrder = findReceiptOrder(queryId, []);
+          if (foundOrder) {
+            setOrder(foundOrder);
+          }
+        }
+        setLoading(false);
+      }
+    };
+
+    fetchLiveInvoice();
+
+    return () => {
+      isMounted = false;
+    };
   }, [id, location.search, location.hash]);
 
   if (loading) {
-    return <div className="flex h-screen items-center justify-center bg-gray-50"><p className="text-gray-500">Loading invoice...</p></div>;
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-900 text-white">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-amber-500 border-t-transparent mb-3"></div>
+          <p className="text-gray-300 font-semibold">Loading Invoice / جاري تحميل الفاتورة...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!order) {
     return (
-      <div className="flex flex-col h-screen items-center justify-center bg-gray-50 p-6 text-center">
-        <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-4">
-          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      <div className="flex flex-col min-h-screen items-center justify-center bg-gray-100 p-6 text-center">
+        <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-4 shadow-sm">
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
         </div>
-        <h2 className="text-xl font-bold text-gray-800 mb-2">Invoice Not Found</h2>
-        <p className="text-gray-600 mb-6 max-w-sm">
-          We couldn't find an invoice with the number <strong>{id}</strong>.
-          If you just scanned this, the order data might only be saved on the shop's local computer.
+        <h2 className="text-2xl font-black text-gray-800 mb-2">Invoice Not Found / الفاتورة غير موجودة</h2>
+        <p className="text-gray-600 mb-6 max-w-sm text-sm">
+          We couldn't locate an active invoice for <strong>{id || 'N/A'}</strong>. Please check the receipt number or scan again.
         </p>
-        <Link to="/" className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium">Go to Homepage</Link>
+        <Link to="/" className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-md transition-colors">
+          Go to Homepage / الرئيسية
+        </Link>
       </div>
     );
   }
 
   const translatedPayment = translatePaymentStatus(order.paymentStatus);
-  const translatedBranch = translateBranch(order.branchId || order.branch);
+  const translatedBranch = translateBranch(order.branchId || order.branch || order.branchName);
   const translatedService = translateService(order.serviceType);
   const expectedDeliveryInfo = getExpectedDeliveryInfo(order);
   const displayTotal = getDisplayTotal(order);
 
+  const discountVal = Number(order.discount !== undefined ? order.discount : (order.discountAmount || 0));
+  const paidVal = order.paymentStatus === 'Paid'
+    ? displayTotal
+    : order.paymentStatus === 'Pending'
+      ? 0
+      : Number(order.amountPaid || 0);
+  const balanceVal = Math.max(0, displayTotal - paidVal);
+
+  const totalQuantity = (order.itemDetails || []).reduce((acc, it) => acc + (Number(it.quantity) || 0), 0);
+
+  const customerIdDisplay = order.customerNo && order.customerNo !== 'Auto-generated'
+    ? order.customerNo
+    : (order.customerId && order.customerId !== 'Auto-generated' ? order.customerId : 'N/A');
+
+  const customerPhoneDisplay = order.customerPhone || order.contactNumber || order.phone || 'N/A';
+
   return (
-    <div className="min-h-screen bg-gray-100 py-6 px-4 flex justify-center font-sans text-gray-900">
-      <div className="bg-white w-full max-w-md border-2 border-black shadow-lg rounded-xl overflow-hidden print:shadow-none print:w-full print:max-w-none">
-        {/* Header */}
-        <div className="p-6 border-b-2 border-blue-600 text-center bg-blue-50/30 flex flex-col items-center">
-          <img src="/logo.png" alt="Tuhama Logo" className="w-16 h-16 object-contain rounded-2xl mb-3 shadow-md" />
-          <h1 className="text-2xl font-black text-blue-600 tracking-wide uppercase m-0">Tuhama laundry co.</h1>
-          <h2 className="text-xl font-bold text-blue-600 mt-1 mb-2">تهامة برو</h2>
-          <div className="text-xs font-bold text-gray-800 uppercase tracking-widest">
+    <div className="min-h-screen bg-slate-900 py-6 px-3 flex flex-col items-center justify-center font-sans text-gray-900">
+      {/* Top Floating Controls */}
+      <div className="w-full max-w-md flex justify-between items-center mb-3 px-1 print:hidden">
+        <div className="flex items-center gap-2">
+          <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span>
+          <span className="text-xs font-bold text-gray-300">Live Verified Receipt</span>
+        </div>
+        <button
+          onClick={() => window.print()}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-black font-extrabold text-xs rounded-md shadow transition"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+          </svg>
+          Print / طباعة
+        </button>
+      </div>
+
+      {/* Main Receipt Card */}
+      <div className="bg-white w-full max-w-md border border-gray-300 shadow-2xl rounded-2xl overflow-hidden print:border-none print:shadow-none print:w-full print:max-w-none">
+        
+        {/* Header with Logo */}
+        <div className="p-5 border-b-2 border-black text-center bg-amber-50/40 flex flex-col items-center">
+          <div className="flex items-center justify-between w-full mb-3">
+            <div className="text-left flex-1">
+              <div className="text-sm font-black text-black uppercase leading-tight">Tuhama Laundry Co.</div>
+              <div className="text-[10px] text-gray-700 font-bold leading-tight">Cleaning, Ironing &amp; Wash in K.</div>
+            </div>
+            <div className="flex-shrink-0 mx-2">
+              <img src="/logo.png" alt="Tuhama Logo" className="w-14 h-14 object-contain rounded-xl shadow-sm border border-gray-200" />
+            </div>
+            <div className="text-right flex-1" dir="rtl">
+              <div className="text-sm font-black text-black leading-tight">شركة مصابغ تهامة</div>
+              <div className="text-[10px] text-gray-700 font-bold leading-tight">تنظيف وكي وغسيل</div>
+            </div>
+          </div>
+          
+          <div className="text-xs font-bold text-gray-800 tracking-wide mb-1">
+            Tel: 222 03 222
+          </div>
+          <div className="text-xs font-black text-black uppercase tracking-wider border-t border-b border-black py-1 px-4 mt-1">
             Invoice - فاتورة
           </div>
         </div>
 
-        {/* Info Section */}
-        <div className="p-5 border-b border-dashed border-gray-300 space-y-3">
-          <div className="flex justify-between text-sm">
-            <span className="font-bold text-gray-700">Invoice / رقم الفاتورة:</span>
-            <span className="font-semibold text-gray-900">{order.number || 'N/A'}</span>
+        {/* Invoice Number Badge & Live Status */}
+        <div className="p-4 border-b border-dashed border-gray-300 space-y-2.5">
+          <div className="flex justify-between items-center bg-gray-100 p-2.5 rounded-lg border border-gray-300">
+            <div>
+              <span className="text-xs text-gray-500 font-bold block">Invoice Number / رقم الفاتورة</span>
+              <span className="text-base font-black text-black">{order.number || 'N/A'}</span>
+            </div>
+            <div className="text-right">
+              <span className="text-xs text-gray-500 font-bold block">Status / الحالة</span>
+              <span className={`inline-block px-2 py-0.5 rounded text-xs font-black ${
+                order.status === 'Delivered' ? 'bg-green-100 text-green-800 border border-green-300' :
+                order.status === 'Ready' ? 'bg-blue-100 text-blue-800 border border-blue-300' :
+                order.status === 'In Process' ? 'bg-purple-100 text-purple-800 border border-purple-300' :
+                'bg-amber-100 text-amber-900 border border-amber-300'
+              }`}>
+                {order.status || 'Waiting'}
+              </span>
+            </div>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="font-bold text-gray-700">Date / التاريخ:</span>
-            <span className="font-semibold text-gray-900">{formatInvoiceDateTime(order)}</span>
+
+          <div className="flex justify-between text-xs font-bold text-gray-700">
+            <span>Date / التاريخ:</span>
+            <span className="text-black font-semibold">{formatInvoiceDateTime(order)}</span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="font-bold text-gray-700">Branch / الفرع:</span>
-            <span className="font-semibold text-gray-900 text-right">
+
+          <div className="flex justify-between text-xs font-bold text-gray-700">
+            <span>Branch / الفرع:</span>
+            <span className="text-black font-semibold text-right">
               {translatedBranch.en}
               {translatedBranch.ar && translatedBranch.ar.toLowerCase() !== translatedBranch.en.toLowerCase() && (
-                <> <br/> <span dir="rtl" className="text-gray-600 text-xs">{translatedBranch.ar}</span></>
+                <> / <span dir="rtl">{translatedBranch.ar}</span></>
               )}
             </span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="font-bold text-gray-700">Customer / العميل:</span>
-            <span className="font-semibold text-gray-900">{order.customerName || 'N/A'}</span>
+
+          <div className="flex justify-between text-xs font-bold text-gray-700">
+            <span>Customer / العميل:</span>
+            <span className="text-black font-extrabold">{order.customerName || 'N/A'}</span>
           </div>
+
           {order.isSubscriber && (
-            <div className="flex justify-between text-sm bg-amber-100 border border-amber-400 p-2 rounded-lg my-1 text-amber-900 font-extrabold">
+            <div className="flex justify-between items-center text-xs bg-amber-100 border border-amber-400 p-1.5 rounded-md text-amber-950 font-black">
               <span>Subscriber Status / الاشتراك:</span>
-              <span className="text-amber-800 font-extrabold text-base">⭐</span>
+              <span className="text-amber-800 font-black text-sm">⭐ VIP Subscriber</span>
             </div>
           )}
-          <div className="flex justify-between text-sm">
-            <span className="font-bold text-gray-700">Staff / الموظف:</span>
-            <span className="font-semibold text-gray-900">{order.staffName || order.createdBy || 'N/A'}</span>
+
+          <div className="flex justify-between text-xs font-bold text-gray-700">
+            <span>Customer ID / رقم العميل:</span>
+            <span className="text-black font-semibold">{customerIdDisplay}</span>
           </div>
-          <div className="flex justify-between text-sm items-center">
-            <span className="font-bold text-gray-700">Service Type / نوع الخدمة:</span>
-            <span className="font-semibold text-gray-900 text-right">
+
+          <div className="flex justify-between text-xs font-bold text-gray-700">
+            <span>Phone / الهاتف:</span>
+            <span className="text-black font-semibold">{customerPhoneDisplay}</span>
+          </div>
+
+          <div className="flex justify-between text-xs font-bold text-gray-700">
+            <span>Staff / الموظف:</span>
+            <span className="text-black font-semibold">{order.staffName || order.createdBy || 'N/A'}</span>
+          </div>
+
+          <div className="flex justify-between items-center text-xs font-bold text-gray-700">
+            <span>Service Type / نوع الخدمة:</span>
+            <span className="text-right font-black">
               {/express|urgent|مستعجل/i.test(translatedService.en || '') ? (
-                <span className="inline-block bg-red-600 text-white font-bold px-2 py-0.5 rounded text-xs">
+                <span className="inline-block bg-red-600 text-white font-bold px-2 py-0.5 rounded text-[11px]">
                   ⚡ {translatedService.en} / {translatedService.ar}
                 </span>
               ) : (
-                <>
-                  {translatedService.en} <br/> <span dir="rtl" className="text-gray-600 text-xs">{translatedService.ar}</span>
-                </>
+                <span>
+                  {translatedService.en === translatedService.ar ? translatedService.en : `${translatedService.en} / ${translatedService.ar}`}
+                </span>
               )}
             </span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="font-bold text-gray-700">Expected Delivery / التسليم المتوقع:</span>
-            <span className="font-semibold text-gray-900 text-right">
-              {expectedDeliveryInfo.date ? (
-                <>
-                  {expectedDeliveryInfo.date} <br/>
-                </>
-              ) : null}
-              <span dir="rtl" className="text-gray-600 text-xs">({expectedDeliveryInfo.timeEn} / {expectedDeliveryInfo.timeAr})</span>
+
+          <div className="flex justify-between items-center text-xs font-bold text-gray-700">
+            <span>Payment Status / الدفع:</span>
+            <span className={`px-2 py-0.5 rounded font-black text-xs ${
+              order.paymentStatus === 'Paid' ? 'bg-green-100 text-green-800' :
+              order.paymentStatus === 'Partial' ? 'bg-orange-100 text-orange-800' :
+              'bg-red-100 text-red-800'
+            }`}>
+              {translatedPayment.en} / {translatedPayment.ar}
             </span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="font-bold text-gray-700">Status / الدفع:</span>
-            <span className={`font-semibold text-right ${order.paymentStatus === 'Paid' ? 'text-green-600' : 'text-orange-500'}`}>
-              {translatedPayment.en} <br/> <span dir="rtl" className="text-xs">{translatedPayment.ar}</span>
+
+          <div className="flex justify-between text-xs font-bold text-gray-700">
+            <span>Delivery Type / نوع التوصيل:</span>
+            <span className="text-black font-semibold">{order.deliveryType || 'Branch Pickup'}</span>
+          </div>
+
+          <div className="flex justify-between text-xs font-bold text-gray-700">
+            <span>Exp. Delivery / التسليم المتوقع:</span>
+            <span className="text-black font-semibold text-right">
+              {expectedDeliveryInfo.date ? `${expectedDeliveryInfo.date} ` : ''}
+              <span>({expectedDeliveryInfo.timeEn === expectedDeliveryInfo.timeAr ? expectedDeliveryInfo.timeEn : `${expectedDeliveryInfo.timeEn} / ${expectedDeliveryInfo.timeAr}`})</span>
             </span>
           </div>
         </div>
 
         {/* Items Table */}
-        <div className="p-5">
+        <div className="p-4">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b-2 border-gray-800">
-                <th className="py-2 text-xs font-bold uppercase text-gray-800 w-1/2">Item<br/>الصنف</th>
-                <th className="py-2 text-xs font-bold uppercase text-gray-800 text-center w-1/6">Qty<br/>الكمية</th>
-                <th className="py-2 text-xs font-bold uppercase text-gray-800 text-right w-1/6">Price<br/>السعر</th>
-                <th className="py-2 text-xs font-bold uppercase text-gray-800 text-right w-1/6">Total<br/>الإجمالي</th>
+              <tr className="border-b-2 border-black">
+                <th className="py-2 text-[11px] font-black uppercase text-black w-1/2">Item<br/><span className="text-[10px]">الصنف</span></th>
+                <th className="py-2 text-[11px] font-black uppercase text-black text-center w-1/6">Qty<br/><span className="text-[10px]">الكمية</span></th>
+                <th className="py-2 text-[11px] font-black uppercase text-black text-right w-1/6">Price<br/><span className="text-[10px]">السعر</span></th>
+                <th className="py-2 text-[11px] font-black uppercase text-black text-right w-1/6">Total<br/><span className="text-[10px]">الإجمالي</span></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-200">
               {(order.itemDetails || []).map((it, idx) => {
                 const translatedItem = translateGarment(it.name);
                 const itemEn = it.name || translatedItem.en || '';
@@ -261,17 +405,17 @@ const PublicReceipt = () => {
                   itemAr = '';
                 }
                 return (
-                  <tr key={idx} className="text-sm">
-                    <td className="py-3">
-                      {itemEn && <div className="font-bold text-gray-900">{itemEn}</div>}
-                      {itemAr && <div className="text-xs text-gray-500 text-right pr-2" dir="rtl">{itemAr}</div>}
+                  <tr key={idx} className="text-xs">
+                    <td className="py-2.5">
+                      {itemEn && <div className="font-extrabold text-black">{itemEn}</div>}
+                      {itemAr && <div className="text-[11px] text-gray-700 font-bold" dir="rtl">{itemAr}</div>}
                       {it.notes && (
                         <div className="text-[10px] text-gray-500 italic mt-0.5">Note: {it.notes}</div>
                       )}
                     </td>
-                    <td className="py-3 text-center font-bold text-gray-700">{it.quantity}</td>
-                    <td className="py-3 text-right font-mono text-gray-600 text-xs">{formatCurrency(it.unitPrice)}</td>
-                    <td className="py-3 text-right font-mono font-bold text-gray-900">{formatCurrency(it.quantity * it.unitPrice)}</td>
+                    <td className="py-2.5 text-center font-bold text-black">{it.quantity}</td>
+                    <td className="py-2.5 text-right font-mono text-black font-semibold">{formatCurrency(it.unitPrice)}</td>
+                    <td className="py-2.5 text-right font-mono font-black text-black">{formatCurrency(it.quantity * it.unitPrice)}</td>
                   </tr>
                 );
               })}
@@ -279,41 +423,54 @@ const PublicReceipt = () => {
           </table>
         </div>
 
-        {/* Totals */}
-        <div className="p-5 bg-gray-50 border-t border-dashed border-gray-300">
-          <div className="flex justify-between text-sm text-gray-600 mb-2">
-            <span>Subtotal / المجموع الفرعي:</span>
-            <span className="font-mono">{formatCurrency(order.amount || 0)}</span>
+        {/* Totals Section */}
+        <div className="p-4 bg-gray-50 border-t-2 border-black space-y-1.5">
+          <div className="flex justify-between text-xs font-bold text-gray-700">
+            <span>Total Qty / إجمالي الكمية:</span>
+            <span className="font-mono text-black">{totalQuantity}</span>
           </div>
-          {order.discount > 0 && (
-            <div className="flex justify-between text-sm font-bold text-red-500 mb-2">
+          <div className="flex justify-between text-xs font-bold text-gray-700">
+            <span>Subtotal / المجموع الفرعي:</span>
+            <span className="font-mono text-black">{formatCurrency(order.amount || 0)}</span>
+          </div>
+          {discountVal > 0 && (
+            <div className="flex justify-between text-xs font-black text-red-600">
               <span>Discount / الخصم:</span>
-              <span className="font-mono">-{formatCurrency(order.discount)}</span>
+              <span className="font-mono">-{formatCurrency(discountVal)}</span>
             </div>
           )}
           {order.tax > 0 && (
-            <div className="flex justify-between text-sm text-gray-600 mb-3">
+            <div className="flex justify-between text-xs font-bold text-gray-700">
               <span>Tax ({order.taxRate || 0}%) / الضريبة:</span>
-              <span className="font-mono">{formatCurrency(order.tax)}</span>
+              <span className="font-mono text-black">{formatCurrency(order.tax)}</span>
             </div>
           )}
-          <div className="flex justify-between text-lg font-black text-gray-900 border-t-2 border-gray-800 pt-3 mt-1">
+          <div className="flex justify-between text-base font-black text-black border-t-2 border-b-2 border-black py-2 mt-2">
             <span>Total Amount / إجمالي السعر:</span>
             <span className="font-mono">{formatCurrency(displayTotal)}</span>
           </div>
+          <div className="flex justify-between text-xs font-black text-green-700 pt-1">
+            <span>Paid Amount / المبلغ المدفوع:</span>
+            <span className="font-mono">{formatCurrency(paidVal)}</span>
+          </div>
+          <div className="flex justify-between text-xs font-black text-red-600">
+            <span>Remaining Balance / المتبقي:</span>
+            <span className="font-mono">{formatCurrency(balanceVal)}</span>
+          </div>
         </div>
 
-        {/* Footer */}
-        <div className="p-6 text-center bg-white">
-          <div className="mb-6 inline-block p-2 bg-white rounded-xl shadow-sm border border-gray-100">
+        {/* Live QR Verification Badge & Footer */}
+        <div className="p-5 text-center bg-white border-t border-dashed border-gray-300">
+          <div className="mb-3 inline-block p-2 bg-white rounded-xl shadow-md border border-gray-200">
             <img 
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(getReceiptUrl(order.number || '', order))}`} 
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getReceiptUrl(order.number || '', order))}`} 
               alt="Invoice QR" 
-              className="w-32 h-32 mx-auto" 
+              className="w-28 h-28 mx-auto block" 
             />
+            <div className="text-[10px] font-black text-gray-700 mt-1">Scan to View Live / امسح للعرض</div>
           </div>
-          <p className="font-bold text-gray-800 text-sm">Thank you for choosing Tuhama laundry co.!</p>
-          <p className="font-bold text-gray-800 text-sm mt-1" dir="rtl">شكراً لاختياركم تهامة برو!</p>
+          <p className="font-black text-black text-xs">Thank you for choosing Tuhama laundry co.!</p>
+          <p className="font-black text-black text-xs mt-0.5" dir="rtl">شكراً لاختياركم تهامة برو!</p>
         </div>
       </div>
     </div>

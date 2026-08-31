@@ -29,6 +29,13 @@ export const ALL_MODULES = [
     supportedActions: ['view', 'create', 'edit', 'delete']
   },
   {
+    id: 'sa_garments',
+    label: 'Garments & Catalog',
+    category: 'Super Admin',
+    route: '/superadmin/garments',
+    supportedActions: ['view', 'create', 'edit', 'delete']
+  },
+  {
     id: 'sa_audit_logs',
     label: 'Audit Logs',
     category: 'Super Admin',

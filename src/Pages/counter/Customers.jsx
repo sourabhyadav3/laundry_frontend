@@ -4,14 +4,17 @@ import { toast } from 'react-toastify';
 import { AdminStateContext } from '../../context/AdminStateContext';
 import CustomerTable from '../../Components/counter/CustomerTable';
 import Modal from '../../Components/Modal';
-import { formatCurrency, formatDate, generateSubscriptionReceiptPDF, generateCustomerStatementPDF } from '../../utils/exportUtils';
+import PaymentSettleModal from '../../Components/PaymentSettleModal';
+import { formatCurrency, formatDate, generateSubscriptionReceiptPDF, generateCustomerStatementPDF, getCustomerOrders } from '../../utils/exportUtils';
 
 const Customers = () => {
-  const { customers, orders = [], addCustomer, updateCustomer, selectedBranch, areas } = useContext(AdminStateContext);
+  const { customers, orders = [], addCustomer, updateCustomer, settleCustomerBalance, selectedBranch, areas, branches = [] } = useContext(AdminStateContext);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showSettleModal, setShowSettleModal] = useState(false);
+  const [settleTargetCustomer, setSettleTargetCustomer] = useState(null);
   const [showFormModal, setShowFormModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState(null);
@@ -92,12 +95,18 @@ const Customers = () => {
       lastInvoiceDate: '',
       freeBalance: '0',
       freeTotal: '0',
+      inactiveReason: '',
     });
     setIsEditing(false);
     setShowFormModal(true);
   };
 
   const handleSave = () => {
+    if (formData.status === 'Inactive' && !String(formData.inactiveReason || '').trim()) {
+      toast.error('Please provide a reason for inactivating this customer account');
+      return;
+    }
+
     const updatedName = formData.englishName || formData.name || formData.arabicName || 'Unnamed';
     const updatedPhone = formData.phones[0] || formData.phone || '';
 
@@ -332,6 +341,8 @@ const Customers = () => {
               lastInvoiceDate: '',
               freeBalance: '0',
               freeTotal: '0',
+              status: c.status || 'Active',
+              inactiveReason: c.inactiveReason || '',
               ...c,
               isSubscriber: c.isSubscriber === true || (c.isSubscriber !== false && Number(c.insuranceAmount || 0) >= 20),
               englishName: c.englishName || c.name || '',
@@ -348,19 +359,7 @@ const Customers = () => {
 
       <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title="Customer Profile" size="2xl">
         {selectedCustomer && (() => {
-          const cId = String(selectedCustomer.id || selectedCustomer._id || selectedCustomer.customerNo || selectedCustomer.displayId || '');
-          const cName = (selectedCustomer.englishName || selectedCustomer.name || '').trim().toLowerCase();
-          const cPhone = (selectedCustomer.phone || '').trim();
-
-          const customerOrders = orders.filter(o => {
-            const oCustId = String(o.customerId || '');
-            const oCustName = (o.customerName || o.customer || '').trim().toLowerCase();
-            const oCustPhone = (o.phone || o.customerPhone || '').trim();
-            if (cId && oCustId && oCustId === cId) return true;
-            if (cPhone && oCustPhone && oCustPhone === cPhone) return true;
-            if (cName && oCustName && oCustName === cName) return true;
-            return false;
-          }).sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
+          const customerOrders = getCustomerOrders(selectedCustomer, orders);
 
           const totalItemsIssued = customerOrders.reduce((sum, o) => {
             if (o.itemDetails && Array.isArray(o.itemDetails)) {
@@ -430,6 +429,101 @@ const Customers = () => {
 
           return (
             <div className="space-y-6">
+              {/* Inactive Account Alert Banner */}
+              {selectedCustomer.status === 'Inactive' && (
+                <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-3 shadow-xs">
+                  <span className="text-2xl select-none">🛑</span>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-bold text-rose-500">
+                        Customer Account Inactive / حساب العميل موقوف
+                      </h4>
+                      <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-rose-500/20 text-rose-600 font-black">
+                        BLOCKED
+                      </span>
+                    </div>
+                    <p className="text-xs text-primary font-semibold mt-1">
+                      <span className="text-secondary">Reason / سبب إيقاف الحساب: </span>
+                      <span className="text-rose-600 dark:text-rose-400 font-bold">
+                        {selectedCustomer.inactiveReason || 'No reason specified'}
+                      </span>
+                    </p>
+                    <p className="text-[10px] text-secondary mt-0.5">
+                      Invoices and orders cannot be created for this customer until reactivated.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Customer Identity */}
+              <div>
+                <h4 className="text-sm font-semibold uppercase tracking-wider text-secondary mb-3 border-b border-border pb-1">
+                  Customer Identity
+                </h4>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {renderField("Customer ID", selectedCustomer.displayId)}
+                  {renderField("Customer No", selectedCustomer.customerNo)}
+                  {renderField("English Name", selectedCustomer.englishName || selectedCustomer.name)}
+                  {renderField("Arabic Name", selectedCustomer.arabicName)}
+                  {selectedCustomer.customDiscountRate && Number(selectedCustomer.customDiscountRate) > 0 ? (
+                    <div key="discount">
+                      <p className="text-xs uppercase tracking-[0.3em] text-secondary">Discount</p>
+                      <p className="mt-1 font-semibold text-rose-500">
+                        Custom Discount ({selectedCustomer.customDiscountRate}%)
+                      </p>
+                    </div>
+                  ) : null}
+                  {renderField("Status", selectedCustomer.status)}
+                </div>
+              </div>
+
+              {/* Phone Numbers */}
+              <div className="bg-blue-500/5 rounded-2xl p-4">
+                <h4 className="text-sm font-semibold uppercase tracking-wider text-blue-600 mb-3">Phone Numbers</h4>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {renderField("Primary Phone No.", selectedCustomer.phone)}
+                  {selectedCustomer.phones && selectedCustomer.phones.slice(1).map((phone, idx) => {
+                    return renderField(`Alternate No. ${idx + 1}`, phone, null, `alt-phone-${idx}`);
+                  })}
+                </div>
+              </div>
+
+              {/* Address & Location */}
+              {hasAddress ? (
+                <div>
+                  <h4 className="text-sm font-semibold uppercase tracking-wider text-secondary mb-3 border-b border-border pb-1">Address & Location</h4>
+                  <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
+                    {renderField("Area Name", selectedCustomer.areaName)}
+                    {renderField("Street", selectedCustomer.street)}
+                    {renderField("Part No", selectedCustomer.partNo)}
+                    {renderField("Jadda", selectedCustomer.jadda)}
+                    {renderField("Level No", selectedCustomer.levelNo)}
+                    {renderField("House No", selectedCustomer.houseNo)}
+                    {renderField("Flat No", selectedCustomer.flatNo)}
+                    {renderField("Paci No.", selectedCustomer.paciNo)}
+                    {renderField("Address Notes", selectedCustomer.addressNotes)}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Billing & Financial Details */}
+              {hasBilling ? (
+                <div className="bg-slate-500/5 rounded-2xl p-4">
+                  <h4 className="text-sm font-semibold uppercase tracking-wider text-secondary mb-3">Billing & Financial Details</h4>
+                  <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+                    {renderField("Registration Date", selectedCustomer.registrationDate, (val) => formatDate(val))}
+                    {renderField("Subscriber Status", (selectedCustomer.isSubscriber || Number(selectedCustomer.insuranceAmount || 0) >= 20) ? "⭐ YES (Subscriber)" : "No")}
+                    {renderField("Insurance Paid", selectedCustomer.insuranceAmount, (val) => formatCurrency(val))}
+                    {renderField("Invoices Count", selectedCustomer.invoicesCount)}
+                    {renderField("Last Invoice Date", selectedCustomer.lastInvoiceDate, (val) => formatDate(val))}
+                    {renderField("Free Balance", selectedCustomer.freeBalance, (val) => formatCurrency(val))}
+                    {renderField("Free Total", selectedCustomer.freeTotal, (val) => formatCurrency(val))}
+                    {renderField("Email", selectedCustomer.email)}
+                    {renderField("General Notes", selectedCustomer.notes)}
+                  </div>
+                </div>
+              ) : null}
+
               {/* Account Analytics & Usage (1 Month, 6 Months, Items, Due) */}
               <div className="rounded-2xl border border-border bg-surface-alt/60 p-4 shadow-sm">
                 <div className="flex items-center justify-between pb-3 border-b border-border mb-4">
@@ -443,7 +537,7 @@ const Customers = () => {
                   </div>
                   <button
                     type="button"
-                    onClick={() => generateCustomerStatementPDF(selectedCustomer, customerOrders, customerStats)}
+                    onClick={() => generateCustomerStatementPDF(selectedCustomer, customerOrders, customerStats, { branchName: selectedBranch !== 'All' ? selectedBranch : undefined })}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white text-xs font-bold transition-all border border-blue-500/20"
                     title="Print Account Statement"
                   >
@@ -470,19 +564,34 @@ const Customers = () => {
                   </div>
 
                   {/* Total Due */}
-                  <div className="rounded-xl border border-border bg-surface p-3 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-secondary">
-                        Outstanding Due
-                      </span>
-                      <span className="text-sm select-none">💰</span>
+                  <div className="rounded-xl border border-border bg-surface p-3 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-secondary">
+                          Outstanding Due
+                        </span>
+                        <span className="text-sm select-none">💰</span>
+                      </div>
+                      <p className={`mt-1.5 text-lg font-black font-mono ${totalDue > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
+                        {formatCurrency(totalDue)}
+                      </p>
+                      <p className="text-[10px] text-secondary mt-0.5">
+                        {totalDue > 0 ? 'Unpaid balance' : 'All settled'}
+                      </p>
                     </div>
-                    <p className={`mt-1.5 text-lg font-black font-mono ${totalDue > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
-                      {formatCurrency(totalDue)}
-                    </p>
-                    <p className="text-[10px] text-secondary mt-0.5">
-                      {totalDue > 0 ? 'Unpaid balance' : 'All settled'}
-                    </p>
+                    {totalDue > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSettleTargetCustomer(selectedCustomer);
+                          setShowSettleModal(true);
+                        }}
+                        className="mt-2 w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 shadow-xs cursor-pointer"
+                      >
+                        <span>💳</span>
+                        <span>Pay Balance / تسديد</span>
+                      </button>
+                    )}
                   </div>
 
                   {/* 1 Month (30d) Spend */}
@@ -568,26 +677,6 @@ const Customers = () => {
                 </div>
               )}
 
-              {/* Customer Identity */}
-              <div>
-                <h4 className="text-sm font-semibold uppercase tracking-wider text-secondary mb-3 border-b border-border pb-1">Customer Identity</h4>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {renderField("Customer ID", selectedCustomer.displayId)}
-                  {renderField("Customer No", selectedCustomer.customerNo)}
-                  {renderField("English Name", selectedCustomer.englishName || selectedCustomer.name)}
-                  {renderField("Arabic Name", selectedCustomer.arabicName)}
-                  {selectedCustomer.customDiscountRate && Number(selectedCustomer.customDiscountRate) > 0 ? (
-                    <div key="discount">
-                      <p className="text-xs uppercase tracking-[0.3em] text-secondary">Discount</p>
-                      <p className="mt-1 font-semibold text-rose-500">
-                        Custom Discount ({selectedCustomer.customDiscountRate}%)
-                      </p>
-                    </div>
-                  ) : null}
-                  {renderField("Status", selectedCustomer.status)}
-                </div>
-              </div>
-
               {/* Phone Numbers */}
               <div className="bg-blue-500/5 rounded-2xl p-4">
                 <h4 className="text-sm font-semibold uppercase tracking-wider text-blue-600 mb-3">Phone Numbers</h4>
@@ -637,9 +726,23 @@ const Customers = () => {
 
               {/* Actions */}
               <div className="border-t border-border pt-6 flex flex-wrap gap-3">
+                {totalDue > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettleTargetCustomer(selectedCustomer);
+                      setShowSettleModal(true);
+                    }}
+                    className="flex-1 min-w-[180px] rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
+                    title="Pay Outstanding Balance"
+                  >
+                    <span className="text-base select-none">💳</span>
+                    <span>Pay Outstanding Balance</span>
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => generateCustomerStatementPDF(selectedCustomer, customerOrders, customerStats)}
+                  onClick={() => generateCustomerStatementPDF(selectedCustomer, customerOrders, customerStats, { branchName: selectedBranch !== 'All' ? selectedBranch : undefined })}
                   className="flex-1 min-w-[180px] rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 shadow-md transition flex items-center justify-center gap-2"
                   title="Print Customer Statement"
                 >
@@ -687,6 +790,8 @@ const Customers = () => {
                       lastInvoiceDate: '',
                       freeBalance: '0',
                       freeTotal: '0',
+                      status: selectedCustomer.status || 'Active',
+                      inactiveReason: selectedCustomer.inactiveReason || '',
                       ...selectedCustomer,
                       isSubscriber: selectedCustomer.isSubscriber === true || (selectedCustomer.isSubscriber !== false && Number(selectedCustomer.insuranceAmount || 0) >= 20),
                       englishName: selectedCustomer.englishName || selectedCustomer.name || '',
@@ -1003,12 +1108,48 @@ const Customers = () => {
                       name="status"
                       value={formData.status || 'Active'}
                       onChange={handleFormChange}
-                      className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-primary focus:outline-none focus:ring-2 focus:ring-blue-400/40 text-sm"
+                      className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-primary focus:outline-none focus:ring-2 focus:ring-blue-400/40 text-sm cursor-pointer"
                     >
-                      <option value="Active">Active</option>
-                      <option value="Inactive">Inactive</option>
+                      <option value="Active">Active / نشط</option>
+                      <option value="Inactive">Inactive / غير نشط</option>
                     </select>
                   </div>
+
+                  {formData.status === 'Inactive' && (
+                    <div className="col-span-2 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 space-y-2.5">
+                      <label className="block text-xs font-bold text-rose-500 uppercase flex items-center gap-1.5">
+                        <span>⚠️</span>
+                        <span>Reason for Inactivation / سبب إيقاف الحساب *</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="inactiveReason"
+                        required
+                        placeholder="Enter reason e.g. Customer request, unpaid dues, moved out..."
+                        value={formData.inactiveReason || ''}
+                        onChange={handleFormChange}
+                        className="w-full rounded-lg border border-rose-500/40 bg-surface px-3 py-2 text-primary focus:outline-none focus:ring-2 focus:ring-rose-500 text-sm"
+                      />
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        <span className="text-[10px] text-secondary font-semibold">Quick presets:</span>
+                        {[
+                          'Customer requested cancellation / طلب العميل',
+                          'Unpaid outstanding dues / عدم سداد مستحقات',
+                          'Account suspended / إيقاف الحساب مؤقتاً',
+                          'Address changed or moved / تغيير العنوان أو الانتقال'
+                        ].map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, inactiveReason: preset }))}
+                            className="px-2 py-1 text-[10px] font-medium rounded-md border border-rose-500/30 bg-surface text-secondary hover:text-rose-500 hover:border-rose-500 transition cursor-pointer"
+                          >
+                            {preset}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="col-span-2">
                     <label className="block text-xs font-semibold text-secondary uppercase">General Notes</label>
                     <input
@@ -1042,6 +1183,26 @@ const Customers = () => {
             </form>
         )}
       </Modal>
+
+      {/* Settle Outstanding Balance Modal */}
+      <PaymentSettleModal
+        isOpen={showSettleModal}
+        onClose={() => {
+          setShowSettleModal(false);
+          setSettleTargetCustomer(null);
+        }}
+        customer={settleTargetCustomer}
+        customerOrders={getCustomerOrders(settleTargetCustomer, orders)}
+        selectedBranch={selectedBranch}
+        branches={branches}
+        onSettleSuccess={async (custId, payload) => {
+          const res = await settleCustomerBalance(custId, payload);
+          if (res && res.customer) {
+            setSelectedCustomer(res.customer);
+          }
+          return res;
+        }}
+      />
     </div>
   );
 };
