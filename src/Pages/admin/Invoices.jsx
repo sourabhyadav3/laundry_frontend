@@ -41,7 +41,26 @@ const Invoices = () => {
   const filteredOrders = useMemo(() => {
     return orders
       .filter((order) => {
-        const matchesBranch = !selectedBranch || selectedBranch === 'All' || !order.branchId || String(order.branchId) === String(selectedBranch) || String(order.branch) === String(selectedBranch);
+        const matchesBranch = (() => {
+          if (!selectedBranch || selectedBranch === 'All') return true;
+          const selStr = String(selectedBranch).toLowerCase();
+          if (order.branchId && String(order.branchId).toLowerCase() === selStr) return true;
+          if (order.branch && String(order.branch).toLowerCase() === selStr) return true;
+          if (order.transferredTo && String(order.transferredTo).toLowerCase() === selStr) return true;
+          if (order.transferredBranchName && String(order.transferredBranchName).toLowerCase() === selStr) return true;
+          if (Array.isArray(order.sharedBranches) && order.sharedBranches.some(b => String(b).toLowerCase() === selStr)) return true;
+
+          const activeBranchObj = branches?.find(b => String(b.id || b._id).toLowerCase() === selStr || String(b.name || '').toLowerCase() === selStr);
+          if (activeBranchObj) {
+            const bId = String(activeBranchObj.id || activeBranchObj._id).toLowerCase();
+            const bName = String(activeBranchObj.name || '').toLowerCase();
+            if (order.branchId && String(order.branchId).toLowerCase() === bId) return true;
+            if (order.transferredTo && String(order.transferredTo).toLowerCase() === bId) return true;
+            if (order.transferredBranchName && String(order.transferredBranchName).toLowerCase() === bName) return true;
+            if (Array.isArray(order.sharedBranches) && order.sharedBranches.some(b => String(b).toLowerCase() === bId)) return true;
+          }
+          return false;
+        })();
 
         const matchesSearch =
           order.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -62,7 +81,7 @@ const Invoices = () => {
         if (!isNaN(numA) && !isNaN(numB)) return numB - numA;
         return String(b.id || '').localeCompare(String(a.id || ''));
       });
-  }, [orders, searchTerm, statusFilter, paymentFilter, selectedBranch]);
+  }, [orders, searchTerm, statusFilter, paymentFilter, selectedBranch, branches]);
 
   const handleViewOrder = (order) => {
     setSelectedOrder(order);
@@ -182,7 +201,15 @@ const Invoices = () => {
   };
 
   const handleEditClick = (order) => {
-    setEditOrderData(JSON.parse(JSON.stringify(order))); // deep copy
+    const isHome = String(order.deliveryType || '').trim().toLowerCase() === 'home delivery' || order.isHomeDelivery === true || order.deliveryMode === 'home';
+    setEditOrderData({
+      ...JSON.parse(JSON.stringify(order)),
+      deliveryMode: isHome ? 'home' : 'branch',
+      deliveryType: isHome ? 'Home Delivery' : 'Branch Pickup',
+      isHomeDelivery: isHome,
+      expectedDeliveryDate: order.deliveryDate || order.expectedDeliveryDate || '',
+      expectedDeliveryTime: order.expectedDeliveryTime || ''
+    });
     setShowEditModal(true);
     setShowModal(false); // Close view modal if open
   };
@@ -227,6 +254,11 @@ const Invoices = () => {
       }
     }
 
+    const isHome = editOrderData.deliveryMode === 'home';
+    const finalDeliveryType = isHome ? 'Home Delivery' : 'Branch Pickup';
+    const deliveryDateVal = isHome ? (editOrderData.expectedDeliveryDate || editOrderData.deliveryDate || '') : '';
+    const expectedTimeVal = editOrderData.expectedDeliveryTime || '';
+
     const payload = {
       itemDetails: editOrderData.itemDetails.map(item => ({
         name: item.name,
@@ -234,9 +266,15 @@ const Invoices = () => {
         unitPrice: Number(item.unitPrice),
         modifiers: item.modifiers || ''
       })),
-      notes: editOrderData.notes,
+      notes: editOrderData.notes || '',
       serviceType: editOrderData.serviceType,
-      discountAmount: Number(editOrderData.discountAmount || 0)
+      discountAmount: Number(editOrderData.discountAmount || 0),
+      deliveryType: finalDeliveryType,
+      isHomeDelivery: isHome,
+      deliveryMode: isHome ? 'home' : 'branch',
+      deliveryDate: deliveryDateVal,
+      expectedDeliveryDate: deliveryDateVal,
+      expectedDeliveryTime: expectedTimeVal
     };
 
     const res = await editOrder(editOrderData.id || editOrderData._id, payload);
@@ -244,7 +282,7 @@ const Invoices = () => {
     if (res) {
       setShowEditModal(false);
       setEditOrderData(null);
-      if (selectedOrder && (selectedOrder.id === res.id || selectedOrder._id === res.id)) {
+      if (selectedOrder && (selectedOrder.id === res.id || selectedOrder._id === res.id || selectedOrder.number === res.number)) {
         setSelectedOrder(res);
       }
     }
@@ -764,7 +802,7 @@ const Invoices = () => {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-6 pt-4 border-t border-border">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-border">
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-secondary mb-1">Service Type</label>
@@ -775,6 +813,123 @@ const Invoices = () => {
                     className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-primary focus:outline-none focus:ring-2 focus:ring-blue-400"
                   />
                 </div>
+
+                {/* Delivery Method & Time Controls (matching Make Invoice) */}
+                <div className="p-3 bg-surface-alt/40 border border-border/70 rounded-xl flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-[11px] font-bold text-secondary uppercase tracking-wider">
+                      Delivery Type
+                    </label>
+                    <div className="flex bg-surface p-0.5 rounded-lg border border-border">
+                      <button
+                        type="button"
+                        onClick={() => setEditOrderData({
+                          ...editOrderData,
+                          deliveryType: 'Branch Pickup',
+                          deliveryMode: 'branch',
+                          isHomeDelivery: false
+                        })}
+                        className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                          editOrderData.deliveryMode === 'branch' || !editOrderData.deliveryMode
+                            ? 'bg-blue-600 text-white shadow-sm font-bold'
+                            : 'text-secondary hover:text-primary'
+                        }`}
+                      >
+                        🏪 Branch Pickup
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditOrderData({
+                          ...editOrderData,
+                          deliveryType: 'Home Delivery',
+                          deliveryMode: 'home',
+                          isHomeDelivery: true,
+                          deliveryDate: editOrderData.deliveryDate || editOrderData.expectedDeliveryDate || new Date().toISOString().split('T')[0],
+                          expectedDeliveryDate: editOrderData.expectedDeliveryDate || editOrderData.deliveryDate || new Date().toISOString().split('T')[0]
+                        })}
+                        className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                          editOrderData.deliveryMode === 'home'
+                            ? 'bg-blue-600 text-white shadow-sm font-bold'
+                            : 'text-secondary hover:text-primary'
+                        }`}
+                      >
+                        🏠 Home Delivery
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Date & Time Edit Controls */}
+                  <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
+                    <div className={`grid ${editOrderData.deliveryMode === 'home' ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+                      {editOrderData.deliveryMode === 'home' && (
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold text-secondary uppercase tracking-wider">
+                            📅 Expected Ready Date
+                          </label>
+                          <input
+                            type="date"
+                            value={editOrderData.expectedDeliveryDate ? editOrderData.expectedDeliveryDate.substring(0, 10) : (editOrderData.deliveryDate ? editOrderData.deliveryDate.substring(0, 10) : '')}
+                            onChange={(e) => setEditOrderData({ ...editOrderData, deliveryDate: e.target.value, expectedDeliveryDate: e.target.value })}
+                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-border bg-surface text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 h-9"
+                          />
+                        </div>
+                      )}
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold text-secondary uppercase tracking-wider">
+                          ⏰ Ready In / Delivery Time
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 1 Hour, 2 Hours"
+                          value={editOrderData.expectedDeliveryTime || ''}
+                          onChange={(e) => setEditOrderData({ ...editOrderData, expectedDeliveryTime: e.target.value })}
+                          className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-border bg-surface text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 h-9"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Quick Time Pills */}
+                    <div className="flex items-center gap-1 overflow-x-auto pt-1 pb-0.5" style={{ msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
+                      <span className="text-[9px] font-bold text-secondary uppercase shrink-0">
+                        ⚡ Quick Time:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setEditOrderData({ ...editOrderData, expectedDeliveryTime: '' })}
+                        className={`px-2 py-0.5 text-[10px] font-medium rounded-md border transition-all ${
+                          !editOrderData.expectedDeliveryTime
+                            ? 'bg-blue-500/15 border-blue-500 text-blue-600 font-bold'
+                            : 'bg-surface border-border text-secondary hover:text-primary'
+                        }`}
+                      >
+                        Default
+                      </button>
+                      {[
+                        'After 1 Hour',
+                        'After 2 Hours',
+                        'After 3 Hours',
+                        'After 4 Hours',
+                        'After 6 Hours',
+                        'After 12 Hours',
+                        'After 24 Hours',
+                      ].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setEditOrderData({ ...editOrderData, expectedDeliveryTime: preset })}
+                          className={`px-2 py-0.5 text-[10px] font-medium rounded-md border shrink-0 transition-all ${
+                            editOrderData.expectedDeliveryTime === preset || editOrderData.expectedDeliveryTime === preset.replace(/^After\s+/, '')
+                              ? 'bg-blue-600 text-white border-blue-600 font-bold shadow-xs'
+                              : 'bg-surface border-border text-secondary hover:text-primary hover:border-blue-500 hover:text-blue-500'
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-secondary mb-1">Discount Amount (KWD)</label>
                   <input

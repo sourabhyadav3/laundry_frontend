@@ -339,17 +339,30 @@ export const exportToPDF = ({ title, subtitle, columns, data, filename, summaryL
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     summaryLines.forEach((line) => {
-      doc.text(line, 14, y);
+      let cleanLine = typeof line === 'string'
+        ? line.replace(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g, '').replace(/\(\s*\)/g, '').replace(/\s{2,}/g, ' ').trim()
+        : line;
+      doc.text(cleanLine, 14, y);
       y += 5;
     });
     y += 4;
   }
 
-  const head = [columns.map((c) => c.label)];
+  const head = [columns.map((c) => {
+    let label = c.label || '';
+    if (typeof label === 'string') {
+      label = label.replace(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g, '').replace(/\s*\/\s*$/, '').trim();
+    }
+    return label;
+  })];
   const body = data.map((row) =>
     columns.map((c) => {
-      const val = getCellValue(row, c);
-      return extractTextFromReact(val);
+      let val = getCellValue(row, c);
+      val = extractTextFromReact(val);
+      if (typeof val === 'string') {
+        val = val.replace(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g, '').replace(/\s*\/\s*$/, '').trim();
+      }
+      return val;
     })
   );
 
@@ -836,33 +849,51 @@ export const getExpectedDeliveryInfo = (order) => {
 export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
   cacheReceiptSnapshot(order);
 
-  // Look up customer displayId and phone number from window cache
-  const customersList = window.__cachedCustomers || [];
-  const customerObj = customersList.find(
-    (c) =>
-      c.id === order?.customerId ||
-      c._id === order?.customerId ||
-      (order?.customerId && (String(c.id) === String(order.customerId) || String(c._id) === String(order.customerId))) ||
-      (c.name && order?.customerName && c.name.toLowerCase() === order.customerName.toLowerCase())
-  );
+  // Look up customer displayId and phone number from window cache or localStorage or order directly
+  let customerObj = null;
+  const cachedList = window.__cachedCustomers || [];
+  const storedList = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('cached_customers') || '[]');
+    } catch (e) {
+      return [];
+    }
+  })();
+  const customersList = [...cachedList, ...storedList];
 
-  let rawCustNo = customerObj?.customerNo || order?.customerNo;
-  let rawCustId = customerObj?.id || order?.customerId;
+  if (customersList.length > 0) {
+    customerObj = customersList.find(
+      (c) =>
+        c.id === order?.customerId ||
+        c._id === order?.customerId ||
+        (order?.customerId && (String(c.id) === String(order.customerId) || String(c._id) === String(order.customerId))) ||
+        (c.name && order?.customerName && c.name.toLowerCase() === order.customerName.toLowerCase())
+    );
+  }
+
+  let rawCustNo = order?.customerNo || customerObj?.customerNo;
   let rawDisplayId = customerObj?.displayId || order?.displayId;
-  let rawDbId = customerObj?._id || order?._id;
+  let rawCustId = customerObj?.id || order?.customerId;
 
   let customerIdStr = 'N/A';
-  if (rawCustNo && rawCustNo !== 'Auto-generated') {
+  if (rawCustNo && rawCustNo !== 'Auto-generated' && !/^[0-9a-fA-F]{24}$/.test(String(rawCustNo))) {
     customerIdStr = rawCustNo;
   } else if (rawDisplayId) {
     customerIdStr = `CUST-${String(rawDisplayId).padStart(4, '0')}`;
-  } else if (rawCustId && rawCustId !== 'Auto-generated') {
+  } else if (rawCustId && rawCustId !== 'Auto-generated' && !/^[0-9a-fA-F]{24}$/.test(String(rawCustId))) {
     customerIdStr = rawCustId;
-  } else if (rawDbId && rawDbId !== 'Auto-generated') {
-    customerIdStr = rawDbId;
+  } else if (order?.customerId && /^[0-9a-fA-F]{24}$/.test(String(order.customerId))) {
+    customerIdStr = `CUST-${String(order.customerId).slice(-4).toUpperCase()}`;
+  } else if (customerObj?._id) {
+    customerIdStr = `CUST-${String(customerObj._id).slice(-4).toUpperCase()}`;
   }
 
-  const customerPhoneStr = customerObj?.phone || order?.contactNumber || 'N/A';
+  const customerPhoneStr =
+    order?.customerPhone ||
+    order?.contactNumber ||
+    customerObj?.phone ||
+    (customerObj?.phones && customerObj.phones[0]) ||
+    'N/A';
 
   // Calculate total quantity
   const totalQuantity = (order?.itemDetails || []).reduce((acc, it) => acc + (Number(it.quantity) || 0), 0);
@@ -938,6 +969,18 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
       <div style="display: flex; justify-content: space-between; font-size: 10px; color: #000 !important; font-weight: 700; margin-bottom: 2px;">
         <span style="font-size: 10px; font-weight: 700;">Discount / الخصم:</span>
         <span style="font-family: monospace; font-size: 10px; font-weight: 700;">-${formatCurrency(order.discount)}</span>
+      </div>
+    `;
+  }
+
+  // Free Balance deduction lines
+  let freeBalanceLine = '';
+  const freeBalUsed = Number(order?.freeBalanceUsed || 0);
+  if (freeBalUsed > 0) {
+    freeBalanceLine = `
+      <div style="display: flex; justify-content: space-between; font-size: 10px; color: #2563eb !important; font-weight: 800; margin-bottom: 2px;">
+        <span style="font-size: 10px; font-weight: 800;">Free Balance / الرصيد المجاني:</span>
+        <span style="font-family: monospace; font-size: 10px; font-weight: 800;">-${formatCurrency(freeBalUsed)}</span>
       </div>
     `;
   }
@@ -1247,6 +1290,7 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
               <span style="font-family: monospace; font-size: 10px; font-weight: 700;">${formatCurrency(order?.amount || 0)}</span>
             </div>
             ${discountLine}
+            ${freeBalanceLine}
             ${taxLine}
             <div class="total-row">
               <span style="font-size: 13px; font-weight: 800;">Total Amount / إجمالي السعر:</span>
@@ -2037,6 +2081,169 @@ export const generateCustomerStatementPDF = (customer, customerOrders = [], stat
     }
   }, 10000);
 };
+
+/**
+ * Generate and download a full professional A4 PDF Customer Account Statement
+ */
+export const exportCustomerStatementA4PDF = (customer, customerOrders = [], stats = {}, options = {}) => {
+  if (!customer) return false;
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  let y = 14;
+
+  const customerName = customer.englishName || customer.name || 'Valued Customer';
+  const customerId = (customer.customerNo && customer.customerNo !== 'Auto-generated')
+    ? customer.customerNo
+    : (customer.displayId ? customer.displayId : (customer.id && customer.id !== 'Auto-generated' ? customer.id : customer._id || 'N/A'));
+  const customerPhone = customer.phones?.[0] || customer.phone || 'N/A';
+  const branchName = options.branchName || customer.branchName || customer.branch || getActiveBranchName();
+
+  const addressParts = [
+    customer.areaName ? `Area: ${customer.areaName}` : '',
+    customer.street ? `Street: ${customer.street}` : '',
+    customer.houseNo ? `House: ${customer.houseNo}` : '',
+    customer.flatNo ? `Flat: ${customer.flatNo}` : '',
+  ].filter(Boolean).join(', ');
+
+  // Header Title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(37, 99, 235);
+  doc.text('Tuhama Laundry Co.', 14, y);
+  doc.setFontSize(12);
+  doc.setTextColor(50);
+  doc.text('Customer Account Statement', pageWidth - 14, y, { align: 'right' });
+  y += 7;
+
+  // Sub-header Line
+  doc.setDrawColor(220);
+  doc.setLineWidth(0.5);
+  doc.line(14, y, pageWidth - 14, y);
+  y += 6;
+
+  // Customer & Statement Info Box
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(40);
+  doc.text(`Customer Name: ${customerName}`, 14, y);
+  doc.text(`Statement Date: ${formatDate(new Date())}`, pageWidth - 14, y, { align: 'right' });
+  y += 5;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(80);
+  doc.text(`Customer ID: ${customerId}  |  Mobile: ${customerPhone}`, 14, y);
+  doc.text(`Branch: ${branchName}`, pageWidth - 14, y, { align: 'right' });
+  y += 5;
+
+  if (addressParts) {
+    doc.text(`Address: ${addressParts}`, 14, y);
+    y += 5;
+  }
+
+  y += 3;
+
+  // Summary Metrics Banner
+  const totalOrders = customerOrders.length;
+  const totalItems = stats.totalItemsIssued || 0;
+  const lifetimeSpend = stats.lifetimeSpend || 0;
+  const totalDue = stats.totalDue || 0;
+  const monthSpend = stats.monthSpend || 0;
+  const sixMonthSpend = stats.sixMonthSpend || 0;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Total Orders', 'Total Items Processed', '1 Month Spend', '6 Months Spend', 'Lifetime Spend', 'Outstanding Due']],
+    body: [[
+      `${totalOrders}`,
+      `${totalItems} pcs`,
+      formatCurrency(monthSpend),
+      formatCurrency(sixMonthSpend),
+      formatCurrency(lifetimeSpend),
+      formatCurrency(totalDue)
+    ]],
+    theme: 'grid',
+    styles: { fontSize: 8, cellPadding: 2.5, halign: 'center' },
+    headStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold' },
+    columnStyles: {
+      5: { fontStyle: 'bold', textColor: totalDue > 0 ? [220, 38, 38] : [4, 120, 87] }
+    },
+    margin: { left: 14, right: 14 }
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+
+  // Orders History Table
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(30);
+  doc.text(`Order History & Financial Transactions (${customerOrders.length})`, 14, y);
+  y += 4;
+
+  const tableHead = [['#', 'Date', 'Invoice #', 'Service', 'Items', 'Total Amount', 'Paid', 'Due', 'Status']];
+  const tableBody = customerOrders.map((o, idx) => {
+    const orderDate = formatDate(o.createdAt || o.date);
+    const orderNum = o.number || o.orderNumber || o.id || 'N/A';
+    const service = o.serviceType || 'Normal';
+    const itemsCount = (o.itemDetails && Array.isArray(o.itemDetails))
+      ? o.itemDetails.reduce((sum, it) => sum + (Number(it.qty || it.quantity) || 1), 0)
+      : (o.itemCount || 1);
+    const total = Number(o.totalAmount || 0);
+    const isPaid = o.paymentStatus === 'Paid';
+    const isPartial = o.paymentStatus === 'Partial';
+    const paid = o.amountPaid !== undefined && o.amountPaid !== null && Number(o.amountPaid) > 0
+      ? Number(o.amountPaid)
+      : (isPaid ? total : 0);
+    const due = isPaid ? 0 : (isPartial ? Math.max(0, total - paid) : total);
+
+    return [
+      `${idx + 1}`,
+      orderDate,
+      orderNum,
+      service,
+      `${itemsCount}`,
+      formatCurrency(total),
+      formatCurrency(paid),
+      formatCurrency(due),
+      o.status || 'Pending'
+    ];
+  });
+
+  autoTable(doc, {
+    startY: y,
+    head: tableHead,
+    body: tableBody,
+    theme: 'grid',
+    styles: { fontSize: 7.5, cellPadding: 2 },
+    headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: {
+      0: { halign: 'center' },
+      4: { halign: 'center' },
+      5: { halign: 'right' },
+      6: { halign: 'right' },
+      7: { halign: 'right', fontStyle: 'bold' },
+      8: { halign: 'center' }
+    },
+    margin: { left: 14, right: 14 },
+    didDrawPage: () => {
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text(
+        'Tuhama Laundry Co. — Customer Account Statement',
+        pageWidth / 2,
+        doc.internal.pageSize.getHeight() - 8,
+        { align: 'center' }
+      );
+    }
+  });
+
+  const safeCustomerName = customerName.replace(/[^a-zA-Z0-9]/g, '_');
+  const filename = `Customer_Statement_${safeCustomerName}_${customerId}.pdf`;
+  doc.save(filename);
+  return true;
+};
 // ——— Payment report ———
 
 export const PAYMENT_EXPORT_COLUMNS = [
@@ -2239,18 +2446,21 @@ export const generateShiftSettlementPDF = (shiftData, options = {}) => {
   const staffList = shiftData.staffBreakdown || [];
   const expensesList = shiftData.expensesBreakdown || [];
 
+  const morningStaff = (shiftData.morningStaff && shiftData.morningStaff.length > 0) ? shiftData.morningStaff.join(', ') : '';
+  const eveningStaff = (shiftData.eveningStaff && shiftData.eveningStaff.length > 0) ? shiftData.eveningStaff.join(', ') : '';
+
   const staffRowsHtml = staffList.map(st => `
     <tr>
       <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; font-weight: 700;">
-        ${st.name}
+        ${st.staffName || st.name}
         <div style="font-size: 8px; color: #555; font-weight: normal; margin-top: 1px;">
-          💵 Cash: ${formatCurrency(st.cashCollected || 0)} | 💳 K-Net: ${formatCurrency(st.knetCollected || 0)} | 🎟️ Bukey: ${formatCurrency(st.bukeyCollected || 0)} | 💰 Credit: ${formatCurrency(st.creditPending || 0)}
+          <span style="font-weight: 700; color: #2563eb;">[${st.shift || (st.shiftKey === 'Morning' ? 'Morning / صباحية' : 'Evening / مسائية')}]</span> | 💵 Cash: ${formatCurrency(st.cashCollected || 0)} | 💳 K-Net: ${formatCurrency(st.knetCollected || 0)} | 🎟️ Bukey: ${formatCurrency(st.bukeyCollected || 0)} | 💰 Credit: ${formatCurrency(st.creditCollected || st.creditPending || 0)}
         </div>
       </td>
-      <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; text-align: center; vertical-align: top;">${st.count || 0}</td>
+      <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; text-align: center; vertical-align: top;">${st.invoicesCount || st.count || 0}</td>
       <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; text-align: right; font-family: monospace; font-weight: 800; vertical-align: top;">
-        ${formatCurrency(st.sales || 0)}
-        <div style="font-size: 8px; color: #047857; font-weight: 700;">Net: ${formatCurrency(st.netCashInHand !== undefined ? st.netCashInHand : (st.cashCollected || 0))}</div>
+        ${formatCurrency(st.totalRevenue !== undefined ? st.totalRevenue : (st.sales || 0))}
+        <div style="font-size: 8px; color: #047857; font-weight: 700;">Deposit: ${formatCurrency(st.netCashInHand !== undefined ? st.netCashInHand : (st.cashCollected || 0))}</div>
       </td>
     </tr>
   `).join('');
@@ -2402,6 +2612,16 @@ export const generateShiftSettlementPDF = (shiftData, options = {}) => {
               <span style="font-weight: 600;">Branch / الفرع:</span>
               <span style="font-weight: 800;">${branchName}</span>
             </div>
+            ${morningStaff ? `
+            <div class="info-row">
+              <span style="font-weight: 600;">Morning Staff / موظفو الصباح:</span>
+              <span style="font-weight: 800; color: #1e40af;">${morningStaff}</span>
+            </div>` : ''}
+            ${eveningStaff ? `
+            <div class="info-row">
+              <span style="font-weight: 600;">Evening Staff / موظفو المساء:</span>
+              <span style="font-weight: 800; color: #7e22ce;">${eveningStaff}</span>
+            </div>` : ''}
             <div class="info-row">
               <span style="font-weight: 600;">Invoices Count / عدد الفواتير:</span>
               <span style="font-weight: 800;">${shiftData.invoicesCount || 0}</span>

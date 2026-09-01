@@ -155,54 +155,20 @@ const Navbar = () => {
             <div className="flex items-center gap-2 rounded-2xl border border-border bg-surface px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-secondary shadow-sm">
               <FiMapPin size={16} className="text-blue-500" />
               <span className="hidden lg:inline">
-                All Branches
+                {t('All Branches') || 'All Branches'}
               </span>
             </div>
           )}
-
-          {/* Commented out Super Admin dropdown selector to easily restore later if needed
-          {userRole === 'Super Admin' && branches.length > 0 && (
-            <div className="relative" ref={branchDropdownRef}>
-              <button
-                type="button"
-                className="flex items-center gap-2 rounded-2xl border border-border bg-surface px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-secondary shadow-sm hover:bg-surface-hover hover:text-primary transition-all duration-200"
-                onClick={() => setBranchDropdownOpen(!branchDropdownOpen)}
-              >
-                <FiMapPin size={16} />
-                <span className="hidden lg:inline">
-                  {selectedBranch === 'All' ? 'All Branches' : branches.find(b => b.id === selectedBranch)?.name || 'Select Branch'}
-                </span>
-                <FiChevronDown size={14} className={`transition-transform duration-200 ${branchDropdownOpen ? 'rotate-180' : ''}`} />
-              </button>
-              
-              {branchDropdownOpen && (
-                <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-48 rounded-2xl border border-border bg-surface py-2 shadow-lg z-50">
-                  <button
-                    className={`block w-full text-left px-4 py-2 text-sm ${selectedBranch === 'All' ? 'bg-blue-50/50 text-blue-600 font-semibold' : 'text-secondary hover:bg-surface-hover hover:text-primary'}`}
-                    onClick={() => { setSelectedBranch('All'); setBranchDropdownOpen(false); }}
-                  >
-                    All Branches
-                  </button>
-                  {branches.map(branch => (
-                    <button
-                      key={branch.id}
-                      className={`block w-full text-left px-4 py-2 text-sm ${selectedBranch === branch.id ? 'bg-blue-50/50 text-blue-600 font-semibold' : 'text-secondary hover:bg-surface-hover hover:text-primary'}`}
-                      onClick={() => { setSelectedBranch(branch.id); setBranchDropdownOpen(false); }}
-                    >
-                      {branch.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          */}
 
           {userRole !== 'Super Admin' && (userRole === 'Admin' || userRole === 'Counter Staff' || userRole === 'Counter' || userRole === 'Delivery Staff' || userRole === 'Delivery') && branches.length > 0 && (
             <div className="flex items-center gap-2 rounded-2xl border border-border bg-surface px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-secondary shadow-sm">
               <FiMapPin size={16} className="text-blue-500" />
               <span className="hidden sm:inline">
-                {branches.find(b => b.id === selectedBranch)?.name || 'Ragheey'}
+                {(() => {
+                  const curBranch = branches.find(b => b.id === selectedBranch);
+                  if (!curBranch) return language === 'ar' ? (t('Ragheey') || 'الرقعي') : 'Ragheey';
+                  return language === 'ar' ? (curBranch.nameAr || curBranch.arabicName || t(curBranch.name) || curBranch.name) : curBranch.name;
+                })()}
               </span>
             </div>
           )}

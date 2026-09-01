@@ -92,6 +92,7 @@ const MakeInvoice = () => {
       discountChecked: false,
       discountPercent: 0,
       discountValue: 0,
+      useFreeBalance: false,
       deliveryMode: 'branch',
     };
     if (!saved) return defaults;
@@ -389,9 +390,19 @@ const MakeInvoice = () => {
   const tax = 0; // Tax removed
   const taxRate = 0;
 
+  const customerFreeBalance = Number(selectedCustomerObj?.freeBalance || 0);
+
+  const freeBalanceDeduction = useMemo(() => {
+    if (!form.useFreeBalance || customerFreeBalance <= 0) return 0;
+    const afterDiscount = Math.max(0, subtotal - discountAmount);
+    return Math.min(customerFreeBalance, afterDiscount);
+  }, [form.useFreeBalance, customerFreeBalance, subtotal, discountAmount]);
+
   const totalAmount = useMemo(() => {
-    return Math.round((subtotal - discountAmount) * 1000) / 1000;
-  }, [subtotal, discountAmount]);
+    const afterDiscount = Math.max(0, subtotal - discountAmount);
+    const finalVal = Math.max(0, afterDiscount - freeBalanceDeduction);
+    return Math.round(finalVal * 1000) / 1000;
+  }, [subtotal, discountAmount, freeBalanceDeduction]);
 
   // Handlers
   const handlePhoneSearch = () => {
@@ -584,6 +595,7 @@ const MakeInvoice = () => {
       discountChecked: false,
       discountPercent: 0,
       discountValue: 0,
+      useFreeBalance: false,
       deliveryMode: 'branch',
     });
     setOrderItems([]);
@@ -670,6 +682,7 @@ const MakeInvoice = () => {
       tax,
       taxRate,
       discount: discountAmount,
+      freeBalanceUsed: freeBalanceDeduction,
       totalAmount,
       amountPaid: received,
       date: new Date().toISOString().split('T')[0],
@@ -713,7 +726,7 @@ const MakeInvoice = () => {
       if (setPayments) setPayments((prev) => [newPayment, ...prev]);
     }
 
-    // Update customer order count and balance in state
+    // Update customer order count, balance, and freeBalance in state
     setCustomers(
       customers.map((c) =>
         c.id === customerObj.id
@@ -721,6 +734,7 @@ const MakeInvoice = () => {
               ...c,
               totalOrders: (c.totalOrders || 0) + 1,
               balance: (c.balance || 0) + remaining,
+              freeBalance: Math.max(0, Number(c.freeBalance || 0) - freeBalanceDeduction),
             }
           : c
       )
@@ -763,6 +777,7 @@ const MakeInvoice = () => {
       tax,
       taxRate,
       discount: discountAmount,
+      freeBalanceUsed: freeBalanceDeduction,
       totalAmount,
       amountPaid: 0,
       date: new Date().toISOString().split('T')[0],
@@ -787,7 +802,7 @@ const MakeInvoice = () => {
 
     addOrder(newOrder);
 
-    // Update customer order count and balance in state
+    // Update customer order count, balance, and freeBalance in state
     setCustomers(
       customers.map((c) =>
         c.id === customerObj.id
@@ -795,6 +810,7 @@ const MakeInvoice = () => {
               ...c,
               totalOrders: (c.totalOrders || 0) + 1,
               balance: (c.balance || 0) + totalAmount,
+              freeBalance: Math.max(0, Number(c.freeBalance || 0) - freeBalanceDeduction),
             }
           : c
       )
@@ -833,6 +849,7 @@ const MakeInvoice = () => {
       tax,
       taxRate,
       discount: discountAmount,
+      freeBalanceUsed: freeBalanceDeduction,
       totalAmount,
       amountPaid: 0,
       date: new Date().toISOString().split('T')[0],
@@ -857,7 +874,7 @@ const MakeInvoice = () => {
 
     addOrder(newOrder);
 
-    // Update customer order count and balance in state
+    // Update customer order count, balance, and freeBalance in state
     setCustomers(
       customers.map((c) =>
         c.id === customerObj.id
@@ -865,6 +882,7 @@ const MakeInvoice = () => {
               ...c,
               totalOrders: (c.totalOrders || 0) + 1,
               balance: (c.balance || 0) + totalAmount,
+              freeBalance: Math.max(0, Number(c.freeBalance || 0) - freeBalanceDeduction),
             }
           : c
       )
@@ -928,6 +946,7 @@ const MakeInvoice = () => {
       tax,
       taxRate,
       discount: discountAmount,
+      freeBalanceUsed: freeBalanceDeduction,
       totalAmount,
       date: new Date().toISOString().split('T')[0],
       pickupDate: new Date().toISOString().split('T')[0],
@@ -949,10 +968,16 @@ const MakeInvoice = () => {
       branchId: branchId,
     });
 
-    // Update customer order count
+    // Update customer order count, balance, and freeBalance
     setCustomers(
       customers.map((c) =>
-        c.id === customerObj.id ? { ...c, totalOrders: (c.totalOrders || 0) + 1 } : c
+        c.id === customerObj.id
+          ? {
+              ...c,
+              totalOrders: (c.totalOrders || 0) + 1,
+              freeBalance: Math.max(0, Number(c.freeBalance || 0) - freeBalanceDeduction),
+            }
+          : c
       )
     );
 
@@ -1363,20 +1388,33 @@ const MakeInvoice = () => {
 
               {/* Service Buttons Row */}
               <div className="flex flex-nowrap items-center gap-1.5 bg-surface-alt/75 border border-border/60 p-1 rounded-lg overflow-x-auto overflow-y-hidden min-w-0 h-11 no-scrollbar">
-                  {services?.filter(s => s.status === 'Active').map((service) => (
-                      <button
-                          key={service.id}
-                          type="button"
-                          onClick={() => setQuickServiceMode(service.name)}
-                          className={`text-[12px] font-black px-3.5 py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap border ${
-                              quickServiceMode === service.name
-                                  ? 'bg-purple-600 border-purple-700 text-white shadow-sm scale-105'
-                                  : 'bg-white border-slate-300 text-black hover:bg-purple-50 hover:border-purple-300 dark:bg-slate-100 dark:border-slate-300 dark:text-black dark:hover:bg-purple-100'
-                          }`}
-                      >
-                          {getTranslatedServiceMode(service.name)}
-                      </button>
-                  ))}
+                  {(() => {
+                      const getOrderScore = (name) => {
+                          const n = String(name || '').toLowerCase().trim();
+                          if (n === 'normal ironing' || n === 'iron only' || n === 'ironing') return 1;
+                          if (n === 'wash & iron' || n === 'wash and iron' || n === 'normal wash & iron') return 2;
+                          if (n === 'express ironing' || n === 'express iron') return 3;
+                          if (n === 'express wash & iron' || n === 'express wash and iron') return 4;
+                          if (!n.includes('express') && !n.includes('urgent')) return 2.5;
+                          return 5;
+                      };
+                      const activeServices = (services || []).filter(s => s.status === 'Active');
+                      const sorted = [...activeServices].sort((a, b) => getOrderScore(a.name) - getOrderScore(b.name));
+                      return sorted.map((service) => (
+                          <button
+                              key={service.id}
+                              type="button"
+                              onClick={() => setQuickServiceMode(service.name)}
+                              className={`text-[12px] font-black px-3.5 py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap border ${
+                                  quickServiceMode === service.name
+                                      ? 'bg-purple-600 border-purple-700 text-white shadow-sm scale-105'
+                                      : 'bg-white border-slate-300 text-black hover:bg-purple-50 hover:border-purple-300 dark:bg-slate-100 dark:border-slate-300 dark:text-black dark:hover:bg-purple-100'
+                              }`}
+                          >
+                              {getTranslatedServiceMode(service.name)}
+                          </button>
+                      ));
+                  })()}
               </div>
             </div>
           </div>
@@ -1731,6 +1769,32 @@ const MakeInvoice = () => {
               )}
             </div>
 
+            {/* Free Balance Deduction Toggle (If customer has free balance) */}
+            {customerFreeBalance > 0 && (
+              <div className="p-2.5 rounded-xl border border-blue-400/40 bg-blue-500/10 flex items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-base select-none">🎁</span>
+                  <div>
+                    <div className="font-bold text-blue-600 dark:text-blue-400">
+                      {language === 'ar' ? 'رصيد مجاني متاح' : 'Available Free Balance'}: <span className="font-mono font-black">{formatCurrency(customerFreeBalance)}</span>
+                    </div>
+                    <div className="text-[10px] text-secondary">
+                      {language === 'ar' ? 'خصم من هذه الفاتورة' : 'Deduct from this invoice'}
+                    </div>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.useFreeBalance}
+                    onChange={(e) => setForm(prev => ({ ...prev, useFreeBalance: e.target.checked }))}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+            )}
+
             {/* Subtotal, Discount & Tax lines */}
             <div className="grid grid-cols-2 gap-y-1 text-xs px-1 font-medium">
               <div className="text-secondary">{t('counter.makeInvoice.subtotalLabel') || "Subtotal"}:</div>
@@ -1779,6 +1843,17 @@ const MakeInvoice = () => {
                   <div className="text-rose-500 font-semibold">{t('counter.makeInvoice.discountLabel') || "Discount"}:</div>
                   <div className="text-right font-mono text-rose-500 font-semibold">
                     -{formatCurrency(discountAmount)}
+                  </div>
+                </>
+              )}
+              {form.useFreeBalance && freeBalanceDeduction > 0 && (
+                <>
+                  <div className="text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1">
+                    <span>🎁</span>
+                    <span>{language === 'ar' ? 'رصيد مجاني مستخدم' : 'Free Balance Used'}:</span>
+                  </div>
+                  <div className="text-right font-mono text-blue-600 dark:text-blue-400 font-bold">
+                    -{formatCurrency(freeBalanceDeduction)}
                   </div>
                 </>
               )}

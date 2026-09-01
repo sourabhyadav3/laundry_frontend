@@ -5,7 +5,7 @@ import { AdminStateContext } from '../../context/AdminStateContext';
 import CustomerTable from '../../Components/counter/CustomerTable';
 import Modal from '../../Components/Modal';
 import PaymentSettleModal from '../../Components/PaymentSettleModal';
-import { formatCurrency, formatDate, generateSubscriptionReceiptPDF, generateCustomerStatementPDF, getCustomerOrders } from '../../utils/exportUtils';
+import { formatCurrency, formatDate, generateSubscriptionReceiptPDF, generateCustomerStatementPDF, exportCustomerStatementA4PDF, getCustomerOrders } from '../../utils/exportUtils';
 
 const Customers = () => {
   const { customers, orders = [], addCustomer, updateCustomer, settleCustomerBalance, selectedBranch, areas, branches = [] } = useContext(AdminStateContext);
@@ -535,15 +535,26 @@ const Customers = () => {
                       Live usage, garments processed, and financial dues
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => generateCustomerStatementPDF(selectedCustomer, customerOrders, customerStats, { branchName: selectedBranch !== 'All' ? selectedBranch : undefined })}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white text-xs font-bold transition-all border border-blue-500/20"
-                    title="Print Account Statement"
-                  >
-                    <span>📄</span>
-                    <span>Print Statement</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => generateCustomerStatementPDF(selectedCustomer, customerOrders, customerStats, { branchName: selectedBranch !== 'All' ? selectedBranch : undefined })}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white text-xs font-bold transition-all border border-blue-500/20"
+                      title="Print Thermal Statement"
+                    >
+                      <span>🖨️</span>
+                      <span>Thermal Slip</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => exportCustomerStatementA4PDF(selectedCustomer, customerOrders, customerStats, { branchName: selectedBranch !== 'All' ? selectedBranch : undefined })}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600/10 text-emerald-500 hover:bg-emerald-600 hover:text-white text-xs font-bold transition-all border border-emerald-500/20"
+                      title="Download A4 PDF Statement"
+                    >
+                      <span>📄</span>
+                      <span>A4 PDF Statement</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -743,11 +754,20 @@ const Customers = () => {
                 <button
                   type="button"
                   onClick={() => generateCustomerStatementPDF(selectedCustomer, customerOrders, customerStats, { branchName: selectedBranch !== 'All' ? selectedBranch : undefined })}
-                  className="flex-1 min-w-[180px] rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 shadow-md transition flex items-center justify-center gap-2"
-                  title="Print Customer Statement"
+                  className="flex-1 min-w-[160px] rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 shadow-md transition flex items-center justify-center gap-2"
+                  title="Print Thermal Statement"
+                >
+                  <span>🖨️</span>
+                  <span>Thermal Slip</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => exportCustomerStatementA4PDF(selectedCustomer, customerOrders, customerStats, { branchName: selectedBranch !== 'All' ? selectedBranch : undefined })}
+                  className="flex-1 min-w-[160px] rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 shadow-md transition flex items-center justify-center gap-2"
+                  title="Download A4 PDF Statement"
                 >
                   <span>📄</span>
-                  <span>Print Account Statement</span>
+                  <span>A4 PDF Statement</span>
                 </button>
                 {(selectedCustomer.isSubscriber === true || (selectedCustomer.isSubscriber !== false && Number(selectedCustomer.insuranceAmount || 0) >= 20)) && (
                   <button

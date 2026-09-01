@@ -297,12 +297,23 @@ export const pageStrings = {
   'Branch updated successfully!': 'تم تحديث الفرع بنجاح!',
 
   // Branch names
+  'Branch Name (Arabic)': 'اسم الفرع (بالعربية)',
+  'Branch Name (English)': 'اسم الفرع (بالإنجليزية)',
+  'Home Service': 'خدمة المنازل',
+  'Home service': 'خدمة المنازل',
+  workshop: 'الورشة',
+  Workshop: 'الورشة',
+  'Carpet section': 'قسم السجاد',
+  'carpet section': 'قسم السجاد',
+  'shoe section': 'قسم الأحذية',
+  'Shoe section': 'قسم الأحذية',
   Ragheey: 'الرقعي',
   Mishrif: 'مشرف',
   Andalus: 'الأندلس',
   Ardiya: 'العارضية',
   Khaitan: 'خيطان',
   Qurain: 'القرين',
+  Quirain: 'القرين',
   Jahra: 'الجهراء',
   Rigai: 'الرقعي',
   'Ragheey Area': 'منطقة الرقعي',
@@ -413,7 +424,6 @@ export const pageStrings = {
   'Due Date': 'تاريخ الاستحقاق',
 
   // Pickup/Delivery
-  'Home Service': 'الخدمة المنزلية',
   'Pickup & Delivery': 'الاستلام والتوصيل',
   'Schedule Pickup/Delivery': 'جدولة الاستلام/التوصيل',
 

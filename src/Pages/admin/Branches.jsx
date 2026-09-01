@@ -2,10 +2,12 @@ import React, { useContext, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FiMapPin, FiPhone, FiEdit2, FiEye, FiUser, FiCheckCircle } from 'react-icons/fi';
 import { AdminStateContext } from '../../context/AdminStateContext';
+import { useLanguage } from '../../context/LanguageContext';
 import Modal from '../../Components/Modal';
 
 const Branches = () => {
   const { branches } = useContext(AdminStateContext);
+  const { language, tr } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranchForView, setSelectedBranchForView] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -83,7 +85,7 @@ const Branches = () => {
                         </div>
                         <div>
                           <p className="font-semibold text-primary">
-                            {branch.name} {isOwnBranch && <span className="ml-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md bg-blue-500/15 text-blue-400">My Branch</span>}
+                            {language === 'ar' ? (branch.nameAr || branch.arabicName || tr(branch.name) || branch.name) : (branch.name || branch.nameAr || branch.arabicName)} {isOwnBranch && <span className="ml-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md bg-blue-500/15 text-blue-400">My Branch</span>}
                           </p>
                           <p className="text-xs text-secondary">{branch.address}</p>
                         </div>

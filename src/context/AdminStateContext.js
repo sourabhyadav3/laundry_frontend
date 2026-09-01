@@ -591,13 +591,23 @@ export const AdminStateProvider = ({ children }) => {
     }
   };
 
-  const updateOrderStatus = async (orderId, status, holdComment) => {
+  const updateOrderStatus = async (orderId, status, holdComment, extraPayload = {}) => {
     try {
-      await api.put(`/orders/${orderId}/status`, { status, holdComment });
+      const payload = typeof status === 'object' && status !== null 
+        ? { ...status } 
+        : { status, holdComment, ...extraPayload };
+      const res = await api.put(`/orders/${orderId}/status`, payload);
+      if (res.data) {
+        setOrders((prev) => prev.map((o) => (o.id === res.data.id || o.number === res.data.number ? res.data : o)));
+      }
       await fetchData(); // Synchronize all order status/delivery transitions
-      toast.success(`Order status updated to: ${status}`);
+      if (payload.isDeliveryOnly || (!payload.status && payload.deliveryType)) {
+        toast.success(`Delivery updated: ${payload.deliveryType}`);
+      } else if (payload.status) {
+        toast.success(`Order status updated to: ${payload.status}`);
+      }
     } catch (e) {
-      toast.error(e.response?.data?.message || 'Failed to progress order');
+      toast.error(e.response?.data?.message || 'Failed to update order');
     }
   };
 
@@ -609,6 +619,18 @@ export const AdminStateProvider = ({ children }) => {
       return true;
     } catch (e) {
       toast.error(e.response?.data?.message || 'Failed to bulk update orders');
+      return false;
+    }
+  };
+
+  const transferOrdersToBranch = async (orderIds, targetBranchId, comment) => {
+    try {
+      const res = await api.put('/orders/transfer', { orderIds, targetBranchId, comment });
+      await fetchData();
+      toast.success(res.data?.message || `Successfully transferred ${orderIds.length} orders to branch`);
+      return true;
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Failed to transfer orders to branch');
       return false;
     }
   };
@@ -626,6 +648,9 @@ export const AdminStateProvider = ({ children }) => {
   const editOrder = async (orderId, editData) => {
     try {
       const res = await api.put(`/orders/${orderId}/edit`, editData);
+      if (res.data) {
+        setOrders((prev) => prev.map((o) => (o.id === res.data.id || o.number === res.data.number ? res.data : o)));
+      }
       await fetchData();
       toast.success('Invoice updated successfully');
       return res.data;
@@ -873,6 +898,7 @@ export const AdminStateProvider = ({ children }) => {
     addOrder,
     updateOrderStatus,
     bulkUpdateOrderStatus,
+    transferOrdersToBranch,
     updateOrderPaymentStatus,
     editOrder,
     deleteOrder,

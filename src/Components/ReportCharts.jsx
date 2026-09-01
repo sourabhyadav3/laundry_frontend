@@ -154,71 +154,161 @@ export const OrdersTrendChart = ({ orders, range, title = "Orders Trend", subtit
 };
 
 export const ServiceRevenueDistributionChart = ({ serviceRevenue, title = "Service Distribution", subtitle = "By category revenue" }) => {
-  const { washing = 0, ironing = 0, dryCleaning = 0, premium = 0 } = serviceRevenue || {};
+  const SERVICE_COLORS = {
+    'Normal Ironing': '#3b82f6',
+    'Wash & Iron': '#10b981',
+    'Express Ironing': '#f59e0b',
+    'Express Wash & Iron': '#ec4899',
+    'Iron Only': '#3b82f6',
+    'Dry Cleaning': '#8b5cf6',
+  };
+
+  const DEFAULT_PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#6366f1'];
+
+  let segments = [];
+  if (Array.isArray(serviceRevenue)) {
+    segments = serviceRevenue.map((item, idx) => ({
+      label: item.name || item.service || item.label || `Service ${idx + 1}`,
+      value: Math.round(item.revenue !== undefined ? item.revenue : (item.value || item.count || 0)),
+      color: SERVICE_COLORS[item.name || item.service] || DEFAULT_PALETTE[idx % DEFAULT_PALETTE.length]
+    }));
+  } else if (typeof serviceRevenue === 'object' && serviceRevenue !== null) {
+    const keys = Object.keys(serviceRevenue);
+    segments = keys.map((key, idx) => {
+      let label = key;
+      if (key === 'washing') label = 'Wash & Iron';
+      if (key === 'ironing') label = 'Normal Ironing';
+      if (key === 'dryCleaning') label = 'Dry Clean';
+      if (key === 'premium') label = 'Express Wash & Iron';
+      return {
+        label,
+        value: Math.round(serviceRevenue[key] || 0),
+        color: SERVICE_COLORS[label] || DEFAULT_PALETTE[idx % DEFAULT_PALETTE.length]
+      };
+    });
+  }
+
+  if (!segments.length) {
+    segments = [
+      { label: 'Normal Ironing', value: 0, color: '#3b82f6' },
+      { label: 'Wash & Iron', value: 0, color: '#10b981' },
+      { label: 'Express Ironing', value: 0, color: '#f59e0b' },
+      { label: 'Express Wash & Iron', value: 0, color: '#ec4899' },
+    ];
+  }
+
   return (
     <DonutPlaceholder
       title={title}
       subtitle={subtitle}
-      segments={[
-        { label: 'Washing', value: Math.round(washing), color: '#0ea5e9' },
-        { label: 'Dry Clean', value: Math.round(dryCleaning), color: '#8b5cf6' },
-        { label: 'Ironing', value: Math.round(ironing), color: '#f59e0b' },
-        { label: 'Premium', value: Math.round(premium), color: '#10b981' },
-      ]}
+      segments={segments}
     />
   );
 };
 
 export const PaymentMethodDistributionChart = ({ breakdown, title = "Payment Distribution", subtitle = "Collections" }) => {
-  const { Cash = 0, Card = 0, Link = 0, Wamd = 0 } = breakdown || {};
+  const METHOD_COLORS = {
+    Cash: '#22c55e',      // Green
+    'K-Net': '#3b82f6',   // Blue
+    Card: '#3b82f6',      // Blue
+    Bukey: '#f59e0b',     // Amber / Gold
+    Credit: '#ef4444',    // Red / Rose
+    Link: '#06b6d4',      // Cyan
+    Wamd: '#8b5cf6',      // Purple
+  };
+
+  const DEFAULT_PALETTE = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#06b6d4', '#8b5cf6'];
+
+  let segments = [];
+  if (Array.isArray(breakdown)) {
+    segments = breakdown.map((item, idx) => ({
+      label: item.method || item.name || item.label || `Method ${idx + 1}`,
+      value: Math.round(item.amount !== undefined ? item.amount : (item.value || item.count || 0)),
+      color: METHOD_COLORS[item.method || item.name] || DEFAULT_PALETTE[idx % DEFAULT_PALETTE.length]
+    }));
+  } else if (typeof breakdown === 'object' && breakdown !== null) {
+    const keys = Object.keys(breakdown);
+    segments = keys.map((key, idx) => {
+      let label = key;
+      if (key === 'Card') label = 'K-Net';
+      return {
+        label,
+        value: Math.round(breakdown[key] || 0),
+        color: METHOD_COLORS[label] || DEFAULT_PALETTE[idx % DEFAULT_PALETTE.length]
+      };
+    });
+  }
+
+  if (!segments.length) {
+    segments = [
+      { label: 'Cash', value: 0, color: '#22c55e' },
+      { label: 'K-Net', value: 0, color: '#3b82f6' },
+      { label: 'Bukey', value: 0, color: '#f59e0b' },
+      { label: 'Credit', value: 0, color: '#ef4444' },
+    ];
+  }
+
   return (
     <DonutPlaceholder
       title={title}
       subtitle={subtitle}
-      segments={[
-        { label: 'Cash', value: Math.round(Cash), color: '#22c55e' },
-        { label: 'Card', value: Math.round(Card), color: '#a855f7' },
-        { label: 'Link', value: Math.round(Link), color: '#0ea5e9' },
-        { label: 'Wamd', value: Math.round(Wamd), color: '#f59e0b' },
-      ]}
+      segments={segments}
     />
   );
 };
 
 export const OrderStatusDistributionChart = ({ breakdown, title = "Order Distribution", subtitle = "Operations" }) => {
+  const STATUS_COLORS = {
+    Waiting: '#64748b',
+    'Preparing in shop': '#8b5cf6',
+    'Preparing in workshop': '#6366f1',
+    Hold: '#f59e0b',
+    Ready: '#10b981',
+    'Ready for delivery': '#14b8a6',
+    'Ready for shop': '#84cc16',
+    'With Driver': '#3b82f6',
+    Delivered: '#059669',
+    Return: '#f97316',
+    Store: '#475569',
+  };
+
+  const DEFAULT_PALETTE = ['#64748b', '#8b5cf6', '#6366f1', '#f59e0b', '#10b981', '#14b8a6', '#84cc16', '#3b82f6', '#059669', '#f97316', '#475569'];
+
   const data = breakdown || {};
-  const delivered = data.Delivered || 0;
-  const ready =
-    (data.Ready || 0) +
-    (data['Ready for delivery'] || 0) +
-    (data['Ready for shop'] || 0);
-  const waiting = (data.Waiting || 0) + (data.Received || 0);
-  const preparing =
-    (data['Preparing in shop'] || 0) +
-    (data['Preparing in workshop'] || 0) +
-    (data.Washing || 0) +
-    (data.Drying || 0) +
-    (data.Ironing || 0) +
-    (data['In Workshop'] || 0) +
-    (data['In Shop'] || 0);
-  const other = Object.entries(data).reduce((sum, [key, val]) => {
-    if (['Delivered', 'Ready', 'Ready for delivery', 'Ready for shop', 'Waiting', 'Received', 'Preparing in shop', 'Preparing in workshop', 'Washing', 'Drying', 'Ironing', 'In Workshop', 'In Shop'].includes(key)) {
-      return sum;
-    }
-    return sum + (val || 0);
-  }, 0);
+  let segments = [];
+
+  if (Array.isArray(data)) {
+    segments = data
+      .filter((item) => (item.count || item.value || 0) > 0)
+      .map((item, idx) => ({
+        label: item.status || item.name || item.label || `Status ${idx + 1}`,
+        value: Number(item.count || item.value || 0),
+        color: STATUS_COLORS[item.status || item.name] || DEFAULT_PALETTE[idx % DEFAULT_PALETTE.length],
+      }));
+  } else if (typeof data === 'object' && data !== null) {
+    segments = Object.entries(data)
+      .filter(([_, count]) => Number(count) > 0)
+      .map(([status, count], idx) => ({
+        label: status,
+        value: Number(count),
+        color: STATUS_COLORS[status] || DEFAULT_PALETTE[idx % DEFAULT_PALETTE.length],
+      }));
+  }
+
+  if (!segments.length) {
+    segments = [
+      { label: 'Waiting', value: 0, color: '#64748b' },
+      { label: 'Preparing', value: 0, color: '#6366f1' },
+      { label: 'Ready', value: 0, color: '#10b981' },
+      { label: 'Delivered', value: 0, color: '#059669' },
+    ];
+  }
 
   return (
     <DonutPlaceholder
       title={title}
       subtitle={subtitle}
-      segments={[
-        { label: 'Delivered', value: delivered, color: '#10b981' },
-        { label: 'Preparing', value: preparing, color: '#0ea5e9' },
-        { label: 'Ready', value: ready, color: '#f59e0b' },
-        { label: 'Waiting', value: waiting, color: '#64748b' },
-        ...(other > 0 ? [{ label: 'Other', value: other, color: '#8b5cf6' }] : []),
-      ]}
+      segments={segments}
     />
   );
 };

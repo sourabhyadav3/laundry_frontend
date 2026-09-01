@@ -829,25 +829,111 @@ const PickupDelivery = () => {
     });
   }, [pickups, searchTerm, pickupStatusFilter, selectedCustomerObj]);
 
+  const allHomeDeliveries = useMemo(() => {
+    const deliveryMap = new Map();
+
+    // 1. First add all explicit Delivery records
+    (deliveries || []).forEach((d) => {
+      const key = d.orderNumber || d.id || d.deliveryId;
+      deliveryMap.set(key, { ...d });
+    });
+
+    // 2. Also ensure every order marked Home Delivery is represented
+    (orders || []).forEach((o) => {
+      const isHome = o.deliveryType === 'Home Delivery' || o.isHomeDelivery === true || o.deliveryMode === 'home';
+      if (!isHome) return;
+
+      const existing = deliveryMap.get(o.number) || deliveryMap.get(o.id);
+      if (existing) {
+        existing.orderNumber = existing.orderNumber || o.number;
+        existing.customer = existing.customer || o.customerName;
+        existing.orderDate = existing.orderDate || o.date || (o.createdAt ? o.createdAt.substring(0, 10) : '');
+        existing.deliveryDate = existing.deliveryDate || o.deliveryDate || o.expectedDeliveryDate || '';
+        existing.branchId = existing.branchId || o.branchId;
+        existing.sharedBranches = o.sharedBranches;
+        existing.transferredTo = o.transferredTo;
+        existing.transferredBranchName = o.transferredBranchName;
+        existing.orderStatus = o.status;
+        existing.paymentStatus = o.paymentStatus;
+        existing.totalAmount = o.totalAmount;
+        existing.createdFromInvoice = true;
+      } else {
+        deliveryMap.set(o.number, {
+          id: `del-order-${o.id || o.number}`,
+          deliveryId: `DEL-${o.number}`,
+          orderNumber: o.number,
+          customer: o.customerName,
+          orderDate: o.date || (o.createdAt ? o.createdAt.substring(0, 10) : ''),
+          deliveryDate: o.deliveryDate || o.expectedDeliveryDate || '',
+          assignedStaff: 'Unassigned',
+          orderCount: (o.itemDetails && o.itemDetails.length) || 1,
+          status: o.status === 'Delivered' ? 'Delivered' : 'Scheduled',
+          address: o.notes || '',
+          contactNumber: o.customerPhone || '',
+          areaName: '',
+          createdFromInvoice: true,
+          branchId: o.branchId,
+          sharedBranches: o.sharedBranches,
+          transferredTo: o.transferredTo,
+          transferredBranchName: o.transferredBranchName,
+          orderStatus: o.status,
+          paymentStatus: o.paymentStatus,
+          totalAmount: o.totalAmount,
+        });
+      }
+    });
+
+    return Array.from(deliveryMap.values());
+  }, [deliveries, orders]);
+
   const filteredDeliveries = useMemo(() => {
-    return deliveries.filter((delivery) => {
+    return allHomeDeliveries.filter((delivery) => {
+      // Branch filtering: match active selected branch (or transferred branch)
+      const matchesBranch = (() => {
+        if (!selectedBranch || selectedBranch === 'All') return true;
+        const selStr = String(selectedBranch).toLowerCase();
+
+        // If Home Service branch is selected, show all home deliveries across all branches
+        const activeBranchObj = branches?.find(b => String(b.id || b._id).toLowerCase() === selStr || String(b.name || '').toLowerCase() === selStr);
+        const bName = String(activeBranchObj?.name || selectedBranch || '').toLowerCase();
+        if (bName.includes('home service') || selStr.includes('home')) return true;
+
+        if (delivery.branchId && String(delivery.branchId).toLowerCase() === selStr) return true;
+        if (delivery.transferredTo && String(delivery.transferredTo).toLowerCase() === selStr) return true;
+        if (delivery.transferredBranchName && String(delivery.transferredBranchName).toLowerCase() === selStr) return true;
+        if (Array.isArray(delivery.sharedBranches) && delivery.sharedBranches.some(b => String(b).toLowerCase() === selStr)) return true;
+
+        if (activeBranchObj) {
+          const bId = String(activeBranchObj.id || activeBranchObj._id).toLowerCase();
+          if (delivery.branchId && String(delivery.branchId).toLowerCase() === bId) return true;
+          if (delivery.transferredTo && String(delivery.transferredTo).toLowerCase() === bId) return true;
+          if (delivery.transferredBranchName && String(delivery.transferredBranchName).toLowerCase() === bName) return true;
+          if (Array.isArray(delivery.sharedBranches) && delivery.sharedBranches.some(b => String(b).toLowerCase() === bId)) return true;
+        }
+        return false;
+      })();
+
       const deliveryCustomer = delivery.customer || '';
       const matchesCustomer =
         selectedCustomerObj
           ? deliveryCustomer.toLowerCase() === selectedCustomerObj.name.toLowerCase()
-          : delivery.createdFromInvoice === true;
-      return (
-        matchesCustomer &&
-        (deliveryCustomer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (delivery.deliveryId || '').includes(searchTerm))
-      );
+          : true;
+
+      const q = searchTerm.toLowerCase();
+      const matchesSearch =
+        !searchTerm ||
+        deliveryCustomer.toLowerCase().includes(q) ||
+        (delivery.deliveryId || '').toLowerCase().includes(q) ||
+        (delivery.orderNumber || '').toLowerCase().includes(q);
+
+      return matchesBranch && matchesCustomer && matchesSearch;
     }).sort((a, b) => {
       if (a.createdAt && b.createdAt) {
         return new Date(b.createdAt) - new Date(a.createdAt);
       }
       return String(b.deliveryId || '').localeCompare(String(a.deliveryId || ''), undefined, { numeric: true, sensitivity: 'base' });
     });
-  }, [deliveries, searchTerm, selectedCustomerObj]);
+  }, [allHomeDeliveries, searchTerm, selectedCustomerObj, selectedBranch, branches]);
 
   const handleViewPickup = (pickup) => {
     setSelectedPickup(pickup);

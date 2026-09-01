@@ -71,27 +71,31 @@ export const growthIndicator = (current, previous) => {
   };
 };
 
-const washingKeywords = ['wash', 'fold', 'express', 'bulk', 'blanket'];
-const ironingKeywords = ['iron', 'pressing', 'press'];
-const dryCleanKeywords = ['dry clean'];
-const premiumKeywords = ['premium', 'silk', 'wool', 'wedding', 'leather', 'stain'];
-
 export const categorizeServiceRevenue = (orders) => {
   const buckets = {
-    washing: 0,
-    ironing: 0,
-    dryCleaning: 0,
-    premium: 0,
+    'Normal Ironing': 0,
+    'Wash & Iron': 0,
+    'Express Ironing': 0,
+    'Express Wash & Iron': 0,
   };
 
   orders.forEach((o) => {
-    const name = (o.serviceType || '').toLowerCase();
-    const amount = o.totalAmount || o.amount || 0;
-    if (premiumKeywords.some((k) => name.includes(k))) buckets.premium += amount;
-    else if (dryCleanKeywords.some((k) => name.includes(k))) buckets.dryCleaning += amount;
-    else if (ironingKeywords.some((k) => name.includes(k))) buckets.ironing += amount;
-    else if (washingKeywords.some((k) => name.includes(k))) buckets.washing += amount;
-    else buckets.washing += amount;
+    const s = (o.serviceType || o.service || '').toLowerCase().trim();
+    const amount = Number(o.totalAmount || o.amount || 0);
+
+    if (s.includes('express') && (s.includes('iron') || s.includes('press')) && (s.includes('wash') || s.includes('fold'))) {
+      buckets['Express Wash & Iron'] += amount;
+    } else if (s.includes('express') && (s.includes('wash') || s.includes('fold'))) {
+      buckets['Express Wash & Iron'] += amount;
+    } else if (s.includes('express') && (s.includes('iron') || s.includes('press'))) {
+      buckets['Express Ironing'] += amount;
+    } else if (s.includes('wash') || s.includes('fold') || s.includes('normal wash')) {
+      buckets['Wash & Iron'] += amount;
+    } else if (s.includes('iron') || s.includes('press')) {
+      buckets['Normal Ironing'] += amount;
+    } else {
+      buckets['Wash & Iron'] += amount;
+    }
   });
 
   return buckets;

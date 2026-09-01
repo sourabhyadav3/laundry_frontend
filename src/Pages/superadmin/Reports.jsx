@@ -314,12 +314,14 @@ const Reports = () => {
       case 'shift_settlement':
         columns = [
           { header: language === 'ar' ? 'الوردية' : 'Shift', accessor: 'shift' },
+          { header: language === 'ar' ? 'اسم الموظف' : 'Staff Name', accessor: 'staffName' },
           { header: language === 'ar' ? 'عدد الفواتير' : 'Invoices Count', accessor: 'invoicesCount' },
           { header: language === 'ar' ? 'إجمالي المبيعات' : 'Total Sales', accessor: 'totalRevenue', format: (val) => formatCurrency(val) },
           { header: language === 'ar' ? 'المحصل نقداً' : 'Cash Collected', accessor: 'cashCollected', format: (val) => formatCurrency(val) },
           { header: language === 'ar' ? 'كي نت' : 'K-Net', accessor: 'knetCollected', format: (val) => formatCurrency(val) },
           { header: language === 'ar' ? 'بوكيه / باقات' : 'Bukey', accessor: 'bukeyCollected', format: (val) => formatCurrency(val) },
-          { header: language === 'ar' ? 'آجل / غير مدفوع' : 'Credit', accessor: 'creditCollected', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'آجل / متبقي' : 'Credit / Pending', accessor: 'creditCollected', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'صافي الكاش للإيداع' : 'Net Cash for Deposit', accessor: 'netCashInHand', format: (val) => formatCurrency(val) },
         ];
         break;
       case 'driver_income':
@@ -703,16 +705,28 @@ const Reports = () => {
         };
 
         const handleExportCustomPDF = () => {
+          const totalRow = filteredData.find(d => d.isTotalRow) || filteredData[filteredData.length - 1] || {};
+          const morningStaffStr = (totalRow.morningStaff && totalRow.morningStaff.length > 0) ? totalRow.morningStaff.join(', ') : 'None';
+          const eveningStaffStr = (totalRow.eveningStaff && totalRow.eveningStaff.length > 0) ? totalRow.eveningStaff.join(', ') : 'None';
+
+          const shiftSummaryLines = stepReportType === 'shift_settlement' ? [
+            `Date Range: ${DATE_PRESETS.find(p => p.id === datePreset)?.label || datePreset}`,
+            `Morning Shift Staff: ${morningStaffStr}`,
+            `Evening Shift Staff: ${eveningStaffStr}`,
+            `Net Cash for Bank Deposit: ${formatCurrency(totalRow.netCashInHand || totalRow.cashCollected || 0)}`,
+            `Total Records: ${filteredData.length}`
+          ] : [
+            `Date Range Preset: ${DATE_PRESETS.find(p => p.id === datePreset)?.label || datePreset}`,
+            `Total Records: ${filteredData.length}`
+          ];
+
           exportToPDF({
             title: customReport.title,
             subtitle: `Generated: ${formatDate(new Date())}`,
-            columns: customReport.columns.map(c => ({ key: c.accessor, label: c.header })),
+            columns: customReport.columns.map(c => ({ key: c.accessor, label: c.header, format: c.format })),
             data: filteredData,
             filename: `${stepReportType}-report.pdf`,
-            summaryLines: [
-              `Date Range Preset: ${DATE_PRESETS.find(p => p.id === datePreset)?.label || datePreset}`,
-              `Total Records: ${filteredData.length}`
-            ]
+            summaryLines: shiftSummaryLines
           });
           toast.success(language === 'ar' ? 'تم التصدير كملف PDF' : 'Exported report as PDF');
         };

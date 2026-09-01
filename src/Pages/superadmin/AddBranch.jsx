@@ -2,14 +2,17 @@ import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiArrowLeft, FiSave } from 'react-icons/fi';
 import { AdminStateContext } from '../../context/AdminStateContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { toast } from 'react-toastify';
 
 const AddBranch = () => {
   const navigate = useNavigate();
   const { addBranch } = useContext(AdminStateContext);
+  const { language, tr } = useLanguage();
 
   const [formData, setFormData] = useState({
     name: '',
+    nameAr: '',
     address: '',
     phone: '',
     email: '',
@@ -24,12 +27,15 @@ const AddBranch = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.name || !formData.address || !formData.phone) {
-      toast.error('Please fill in all required fields');
+      toast.error(tr('Please fill in all required fields'));
       return;
     }
     
-    addBranch(formData);
-    toast.success('Branch added successfully!');
+    addBranch({
+      ...formData,
+      arabicName: formData.nameAr || formData.arabicName || ''
+    });
+    toast.success(tr('Branch added successfully!'));
     navigate('/superadmin/branches');
   };
 
@@ -40,15 +46,17 @@ const AddBranch = () => {
           <FiArrowLeft size={20} />
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-primary">Add New Branch</h1>
-          <p className="text-sm text-secondary">Register a new branch location</p>
+          <h1 className="text-2xl font-bold text-primary">{tr('Add New Branch')}</h1>
+          <p className="text-sm text-secondary">{tr('Register a new branch location')}</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="surface-card p-6 rounded-2xl border border-border space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-primary">Branch Name *</label>
+            <label className="text-sm font-medium text-primary">
+              {language === 'ar' ? 'اسم الفرع (بالإنجليزية) *' : 'Branch Name (English) *'}
+            </label>
             <input 
               type="text" 
               name="name"
@@ -56,6 +64,22 @@ const AddBranch = () => {
               onChange={handleChange}
               className="w-full input-field rounded-xl border border-border px-4 py-2 bg-surface-alt"
               placeholder="e.g. Downtown Branch"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-primary">
+              {language === 'ar' ? 'اسم الفرع (بالعربية)' : 'Branch Name (Arabic)'}
+            </label>
+            <input 
+              type="text" 
+              name="nameAr"
+              value={formData.nameAr}
+              onChange={handleChange}
+              className="w-full input-field rounded-xl border border-border px-4 py-2 bg-surface-alt text-right"
+              placeholder="مثال: قسم السجاد / فرع حولي"
+              dir="rtl"
             />
           </div>
 

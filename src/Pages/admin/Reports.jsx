@@ -103,7 +103,7 @@ const REPORT_TYPES = {
 
 const Reports = () => {
   const { language } = useLanguage();
-  const { customers, staff, drivers, catalog } = useContext(AdminStateContext);
+  const { customers, staff, drivers, catalog, selectedBranch } = useContext(AdminStateContext);
   const [datePreset, setDatePreset] = useState('month');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -304,12 +304,14 @@ const Reports = () => {
       case 'shift_settlement':
         columns = [
           { header: language === 'ar' ? 'الوردية' : 'Shift', accessor: 'shift' },
+          { header: language === 'ar' ? 'اسم الموظف' : 'Staff Name', accessor: 'staffName' },
           { header: language === 'ar' ? 'عدد الفواتير' : 'Invoices Count', accessor: 'invoicesCount' },
           { header: language === 'ar' ? 'إجمالي المبيعات' : 'Total Sales', accessor: 'totalRevenue', format: (val) => formatCurrency(val) },
           { header: language === 'ar' ? 'المحصل نقداً' : 'Cash Collected', accessor: 'cashCollected', format: (val) => formatCurrency(val) },
           { header: language === 'ar' ? 'كي نت' : 'K-Net', accessor: 'knetCollected', format: (val) => formatCurrency(val) },
           { header: language === 'ar' ? 'بوكيه / باقات' : 'Bukey', accessor: 'bukeyCollected', format: (val) => formatCurrency(val) },
-          { header: language === 'ar' ? 'آجل / غير مدفوع' : 'Credit', accessor: 'creditCollected', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'آجل / متبقي' : 'Credit / Pending', accessor: 'creditCollected', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'صافي الكاش للإيداع' : 'Net Cash for Deposit', accessor: 'netCashInHand', format: (val) => formatCurrency(val) },
         ];
         break;
       case 'driver_income':
@@ -735,16 +737,28 @@ const Reports = () => {
         };
 
         const handleExportCustomPDF = () => {
+          const totalRow = filteredData.find(d => d.isTotalRow) || filteredData[filteredData.length - 1] || {};
+          const morningStaffStr = (totalRow.morningStaff && totalRow.morningStaff.length > 0) ? totalRow.morningStaff.join(', ') : 'None';
+          const eveningStaffStr = (totalRow.eveningStaff && totalRow.eveningStaff.length > 0) ? totalRow.eveningStaff.join(', ') : 'None';
+
+          const shiftSummaryLines = stepReportType === 'shift_settlement' ? [
+            `Date Range: ${DATE_PRESETS.find(p => p.id === datePreset)?.label || datePreset}`,
+            `Morning Shift Staff: ${morningStaffStr}`,
+            `Evening Shift Staff: ${eveningStaffStr}`,
+            `Net Cash for Bank Deposit: ${formatCurrency(totalRow.netCashInHand || totalRow.cashCollected || 0)}`,
+            `Total Records: ${filteredData.length}`
+          ] : [
+            `Date Range Preset: ${DATE_PRESETS.find(p => p.id === datePreset)?.label || datePreset}`,
+            `Total Records: ${filteredData.length}`
+          ];
+
           exportToPDF({
             title: customReport.title,
             subtitle: `Generated: ${formatDate(new Date())}`,
             columns: customReport.columns.map(c => ({ key: c.accessor, label: c.header, format: c.format })),
             data: filteredData,
             filename: `${stepReportType}-report.pdf`,
-            summaryLines: [
-              `Date Range Preset: ${DATE_PRESETS.find(p => p.id === datePreset)?.label || datePreset}`,
-              `Total Records: ${filteredData.length}`
-            ]
+            summaryLines: shiftSummaryLines
           });
           toast.success(language === 'ar' ? 'تم التصدير كملف PDF' : 'Exported report as PDF');
         };
@@ -762,7 +776,7 @@ const Reports = () => {
                 {stepReportType === 'shift_settlement' && filteredData.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => generateShiftSettlementPDF(filteredData[0], { shift: stepParameter, branchName: 'Main Branch / الفرع الرئيسي' })}
+                    onClick={() => generateShiftSettlementPDF(filteredData[0], { shift: stepParameter, branchName: selectedBranch !== 'All' ? selectedBranch : 'All Branches' })}
                     className="dashboard-hero-pill flex items-center justify-center gap-1.5 text-xs font-bold py-2 px-4 border border-purple-500/40 bg-purple-500/15 text-purple-600 hover:bg-purple-500/25 shadow-sm"
                   >
                     <span>🖨️</span>
@@ -888,12 +902,31 @@ const Reports = () => {
         </section>
 
         <section className="report-section-card surface-card border border-border p-6 shadow-xl">
-          <h3 className="text-lg font-semibold text-primary">Service-wise Revenue Report</h3>
+          <h3 className="text-lg font-semibold text-primary">
+            {language === 'ar' ? 'تقرير الإيرادات حسب الخدمة' : 'Service-wise Revenue Report'}
+          </h3>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <MetricBlock label="Washing Revenue" value={formatCurrency(metrics.serviceRevenue.washing)} />
-            <MetricBlock label="Ironing Revenue" value={formatCurrency(metrics.serviceRevenue.ironing)} />
-            <MetricBlock label="Dry Cleaning Revenue" value={formatCurrency(metrics.serviceRevenue.dryCleaning)} />
-            <MetricBlock label="Premium Service Revenue" value={formatCurrency(metrics.serviceRevenue.premium)} />
+            {(() => {
+              const servicesMap = metrics.serviceRevenue || {};
+              const entries = Object.entries(servicesMap);
+              if (entries.length === 0) {
+                return (
+                  <>
+                    <MetricBlock label="Normal Ironing Revenue" value={formatCurrency(0)} />
+                    <MetricBlock label="Wash & Iron Revenue" value={formatCurrency(0)} />
+                    <MetricBlock label="Express Ironing Revenue" value={formatCurrency(0)} />
+                    <MetricBlock label="Express Wash & Iron Revenue" value={formatCurrency(0)} />
+                  </>
+                );
+              }
+              return entries.map(([serviceName, rev]) => (
+                <MetricBlock
+                  key={serviceName}
+                  label={`${serviceName} ${language === 'ar' ? 'الإيرادات' : 'Revenue'}`}
+                  value={formatCurrency(rev || 0)}
+                />
+              ));
+            })()}
           </div>
         </section>
 

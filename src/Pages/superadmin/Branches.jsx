@@ -2,6 +2,7 @@ import React, { useContext, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FiPlus, FiEdit2, FiTrash2, FiMapPin, FiPhone, FiLock, FiRefreshCw } from 'react-icons/fi';
 import { AdminStateContext } from '../../context/AdminStateContext';
+import { useLanguage } from '../../context/LanguageContext';
 import Modal from '../../Components/Modal';
 import { toast } from 'react-toastify';
 import api from '../../utils/api';
@@ -9,6 +10,7 @@ import api from '../../utils/api';
 const Branches = () => {
   const navigate = useNavigate();
   const { branches, deleteBranch } = useContext(AdminStateContext);
+  const { language, tr } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [branchToDelete, setBranchToDelete] = useState(null);
@@ -18,8 +20,7 @@ const Branches = () => {
     if (!b) return false;
     return Boolean(
       b.isSystemBranch ||
-      (b.name && b.name.toLowerCase().includes('home service')) ||
-      (b.name && b.name.toLowerCase().includes('main branch'))
+      (b.name && b.name.toLowerCase().includes('home service'))
     );
   };
 
@@ -54,22 +55,11 @@ const Branches = () => {
             status: 'Active'
           });
         }
-
-        const hasMainBranch = list.some(b => b.name && b.name.toLowerCase().includes('main branch'));
-        if (!hasMainBranch) {
-          await api.post('/branches', {
-            name: 'Main Branch',
-            address: 'Headquarters & Central Processing Unit',
-            phone: '+965 2222 1111',
-            email: 'main@tuhama.com',
-            status: 'Active'
-          });
-        }
         success = true;
       }
 
       if (success) {
-        toast.success('Core system branches (Home Service, Main Branch) verified and restored!');
+        toast.success('Core system branches verified and restored!');
         setTimeout(() => {
           window.location.reload();
         }, 600);
@@ -85,30 +75,21 @@ const Branches = () => {
   const confirmDelete = () => {
     if (branchToDelete) {
       deleteBranch(branchToDelete);
-      setBranchToDelete(null);
       setShowDeleteModal(false);
+      setBranchToDelete(null);
     }
   };
 
-  const filteredBranches = [...branches]
-    .sort((a, b) => {
-      if (a.createdAt && b.createdAt) {
-        return new Date(b.createdAt) - new Date(a.createdAt);
-      }
-      const numA = Number(a.id);
-      const numB = Number(b.id);
-      if (!isNaN(numA) && !isNaN(numB)) {
-        return numB - numA;
-      }
-      return a.name.localeCompare(b.name);
-    })
-    .filter(b => 
-      b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      b.address.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+  const filteredBranches = branches.filter(b => {
+    if (b.name && b.name.toLowerCase().includes('main branch')) return false;
+    return b.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      b.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      b.phone?.includes(searchTerm) ||
+      b.manager?.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
   return (
-    <div className="p-4 sm:p-6 space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-primary">Branches</h1>
@@ -119,7 +100,7 @@ const Branches = () => {
             onClick={handleRestoreSystemBranches}
             disabled={isRestoring}
             className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-border bg-surface-alt hover:bg-surface text-secondary hover:text-primary text-xs font-bold transition-all shadow-xs cursor-pointer"
-            title="Auto-verify & restore missing core branches (Home Service, Main Branch)"
+            title="Auto-verify & restore missing core branches (Home Service)"
           >
             <FiRefreshCw className={isRestoring ? 'animate-spin' : ''} size={14} />
             <span>{isRestoring ? 'Restoring...' : 'Restore System Branches'}</span>
@@ -175,7 +156,9 @@ const Branches = () => {
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <p className="font-semibold text-primary">{branch.name}</p>
+                            <p className="font-semibold text-primary">
+                              {language === 'ar' ? (branch.nameAr || branch.arabicName || tr(branch.name) || branch.name) : (branch.name || branch.nameAr || branch.arabicName)}
+                            </p>
                             {isProtected && (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 border border-purple-200 dark:border-purple-800">
                                 <FiLock size={10} /> System Core

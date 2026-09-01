@@ -49,7 +49,26 @@ const Orders = () => {
   const filteredOrders = useMemo(() => {
     return orders
       .filter((order) => {
-        const matchesBranch = !selectedBranch || selectedBranch === 'All' || order.branchId === selectedBranch || order.branch === selectedBranch;
+        const matchesBranch = (() => {
+          if (!selectedBranch || selectedBranch === 'All') return true;
+          const selStr = String(selectedBranch).toLowerCase();
+          if (order.branchId && String(order.branchId).toLowerCase() === selStr) return true;
+          if (order.branch && String(order.branch).toLowerCase() === selStr) return true;
+          if (order.transferredTo && String(order.transferredTo).toLowerCase() === selStr) return true;
+          if (order.transferredBranchName && String(order.transferredBranchName).toLowerCase() === selStr) return true;
+          if (Array.isArray(order.sharedBranches) && order.sharedBranches.some(b => String(b).toLowerCase() === selStr)) return true;
+
+          const activeBranchObj = branches?.find(b => String(b.id || b._id).toLowerCase() === selStr || String(b.name || '').toLowerCase() === selStr);
+          if (activeBranchObj) {
+            const bId = String(activeBranchObj.id || activeBranchObj._id).toLowerCase();
+            const bName = String(activeBranchObj.name || '').toLowerCase();
+            if (order.branchId && String(order.branchId).toLowerCase() === bId) return true;
+            if (order.transferredTo && String(order.transferredTo).toLowerCase() === bId) return true;
+            if (order.transferredBranchName && String(order.transferredBranchName).toLowerCase() === bName) return true;
+            if (Array.isArray(order.sharedBranches) && order.sharedBranches.some(b => String(b).toLowerCase() === bId)) return true;
+          }
+          return false;
+        })();
 
         const matchesSearch =
           order.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -485,22 +504,52 @@ const Orders = () => {
               </div>
             </div>
 
-            {/* Status Update */}
-            <div className="border-t border-border pt-6">
-              <h3 className="mb-4 text-lg font-semibold text-primary">Update Status</h3>
-              <div className="relative inline-block w-full sm:w-64">
-                <select
-                  value={activeOrder.status}
-                  onChange={(e) => handleUpdateStatus(activeOrder.id, e.target.value)}
-                  className="w-full appearance-none rounded-xl border border-border bg-surface py-2.5 px-4 pr-10 text-primary focus:outline-none focus:ring-2 focus:ring-blue-400"
-                >
-                  {statusOrder.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-                <FiChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-secondary" />
+            {/* Status & Delivery Update */}
+            <div className="border-t border-border pt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-primary">Update Status</h3>
+                <div className="relative w-full">
+                  <select
+                    value={activeOrder.status}
+                    onChange={(e) => handleUpdateStatus(activeOrder.id, e.target.value)}
+                    className="w-full appearance-none rounded-xl border border-border bg-surface py-2.5 px-4 pr-10 text-primary focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
+                  >
+                    {statusOrder.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                  <FiChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-secondary" />
+                </div>
+              </div>
+
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-primary">Delivery Option</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateOrderStatus(activeOrder.id, activeOrder.status, '', { deliveryType: 'Branch Pickup', deliveryDate: '' })}
+                    className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
+                      (activeOrder.deliveryType === 'Branch Pickup' || (!activeOrder.deliveryType && !activeOrder.isHomeDelivery))
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                        : 'bg-surface border-border text-secondary hover:text-primary'
+                    }`}
+                  >
+                    🏪 Branch Pickup
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateOrderStatus(activeOrder.id, activeOrder.status, '', { deliveryType: 'Home Delivery', deliveryDate: activeOrder.deliveryDate || new Date().toISOString().split('T')[0] })}
+                    className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
+                      (activeOrder.deliveryType === 'Home Delivery' || activeOrder.isHomeDelivery)
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                        : 'bg-surface border-border text-secondary hover:text-primary'
+                    }`}
+                  >
+                    🚚 Home Delivery
+                  </button>
+                </div>
               </div>
             </div>
 

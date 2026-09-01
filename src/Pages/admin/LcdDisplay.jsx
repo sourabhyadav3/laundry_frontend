@@ -6,7 +6,7 @@ import { FiTv, FiMaximize2, FiMinimize2, FiGrid, FiList, FiRefreshCw, FiArrowLef
 import { useLanguage } from '../../context/LanguageContext';
 
 const LcdDisplay = () => {
-  const { orders, deliveries, pickups, selectedBranch, branches } = useContext(AdminStateContext);
+  const { orders, deliveries, pickups, selectedBranch, branches, services } = useContext(AdminStateContext);
   const { language } = useLanguage();
   const navigate = useNavigate();
 
@@ -207,9 +207,34 @@ const LcdDisplay = () => {
     }
   }, [orders]);
 
+  const isOrderFinishedOrReady = (order) => {
+    if (!order) return true;
+    const normStatus = normalizeOrderStatus(order.status || 'Waiting');
+    const statusLower = String(order.status || '').toLowerCase().trim();
+    return (
+      normStatus === 'Ready' ||
+      normStatus === 'Ready for delivery' ||
+      normStatus === 'Ready for shop' ||
+      normStatus === 'Delivered' ||
+      normStatus === 'Store' ||
+      normStatus === 'Return' ||
+      statusLower === 'ready' ||
+      statusLower === 'ready for delivery' ||
+      statusLower === 'ready for shop' ||
+      statusLower === 'delivered' ||
+      statusLower === 'completed' ||
+      statusLower === 'store' ||
+      statusLower === 'return' ||
+      statusLower === 'cancelled'
+    );
+  };
+
   const filteredLocalOrders = useMemo(() => {
     return allAvailableOrders.filter(order => {
       if (!order) return false;
+      // Client rule: When ready or complete, remove from LCD screen
+      if (isOrderFinishedOrReady(order)) return false;
+
       if (selectedBranch && selectedBranch !== 'All') {
         const branchObj = branches?.find(b => (b.id || b._id)?.toString() === selectedBranch.toString());
         const branchName = branchObj ? branchObj.name : selectedBranch;
@@ -237,8 +262,13 @@ const LcdDisplay = () => {
           return isHomeDeliveryOrder;
         }
 
-        // FOR ALL OTHER BRANCHES: Only show orders belonging specifically to that branch
-        return matchesBranchId || matchesBranchName;
+        // FOR ALL OTHER BRANCHES: Show orders belonging to or transferred to that branch
+        const matchesSharedBranch =
+          (order.transferredTo && order.transferredTo.toString() === selectedBranch.toString()) ||
+          (order.transferredBranchName && String(order.transferredBranchName).toLowerCase() === String(branchName || '').toLowerCase()) ||
+          (Array.isArray(order.sharedBranches) && order.sharedBranches.some(b => b.toString() === selectedBranch.toString()));
+
+        return matchesBranchId || matchesBranchName || matchesSharedBranch;
       }
       return true;
     });
@@ -283,6 +313,135 @@ const LcdDisplay = () => {
     return type.includes('express') || type.includes('urgent');
   };
 
+  // Dynamic remaining countdown calculation based on invoice/order expected time & matched service
+  const getOrderTargetTime = (order) => {
+    if (!order) return null;
+    const isExp = isExpress(order);
+
+    // Look up service duration from Services Management (Admin / Backend)
+    const serviceList = (services && services.length > 0) 
+      ? services 
+      : (window.__cachedServices || JSON.parse(localStorage.getItem('services_list') || '[]'));
+      
+    const orderServiceName = String(order.serviceType || order.service || '').toLowerCase().trim();
+    const matchedService = serviceList.find(s => {
+      const sName = String(s.name || s.serviceName || '').toLowerCase().trim();
+      return sName === orderServiceName || orderServiceName.includes(sName) || sName.includes(orderServiceName);
+    });
+
+    const rawExpected = String(order.expectedDeliveryTime || order.deliveryTime || matchedService?.estimatedTime || '').trim();
+
+    // 1. Determine base creation timestamp
+    let baseMs = null;
+    if (order.createdAt) {
+      const parsed = new Date(order.createdAt).getTime();
+      if (!isNaN(parsed)) baseMs = parsed;
+    }
+    if (!baseMs && (order.date || order.pickupDate)) {
+      const dateStr = order.date || order.pickupDate;
+      const timeStr = order.time || order.orderTime || order.createdTime;
+      if (timeStr) {
+        const parsed = new Date(`${dateStr} ${timeStr}`).getTime();
+        if (!isNaN(parsed)) baseMs = parsed;
+      } else {
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (dateStr === todayStr) {
+          baseMs = Date.now();
+        } else {
+          const parsedDateOnly = new Date(dateStr).getTime();
+          if (!isNaN(parsedDateOnly)) baseMs = parsedDateOnly;
+        }
+      }
+    }
+    if (!baseMs) {
+      baseMs = Date.now();
+    }
+
+    // 2. Check if rawExpected is a clock format like "14:30" or "02:30 PM"
+    const clockMatch = rawExpected.match(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])(?:\s*(AM|PM|am|pm))?$/i);
+    if (clockMatch) {
+      let hours = parseInt(clockMatch[1], 10);
+      const minutes = parseInt(clockMatch[2], 10);
+      const period = clockMatch[3] ? clockMatch[3].toUpperCase() : null;
+      if (period === 'PM' && hours < 12) hours += 12;
+      if (period === 'AM' && hours === 12) hours = 0;
+
+      const target = new Date(order.deliveryDate || order.expectedDeliveryDate || order.date || new Date());
+      target.setHours(hours, minutes, 0, 0);
+      return target.getTime();
+    }
+
+    // 3. Check if rawExpected specifies hours/days like "1 hour", "1 hours", "2 hours", "3 hours", "After 1 Hour"
+    const numMatch = rawExpected.match(/(\d+(?:\.\d+)?)/);
+    if (rawExpected.toLowerCase().includes('day') || rawExpected.includes('يوم')) {
+      const days = numMatch ? parseFloat(numMatch[1]) : 1;
+      return baseMs + days * 24 * 60 * 60 * 1000;
+    }
+
+    if (numMatch || rawExpected.toLowerCase().includes('hour') || rawExpected.includes('ساعة')) {
+      const hours = numMatch ? parseFloat(numMatch[1]) : (isExp ? 1 : 24);
+      return baseMs + hours * 60 * 60 * 1000;
+    }
+
+    // 4. Default fallback: Express orders default to 1 hour (as configured in Laundry Services)
+    if (isExp) {
+      return baseMs + 1 * 60 * 60 * 1000;
+    }
+
+    return null;
+  };
+
+  const getRemainingTime = (order) => {
+    const normStatus = normalizeOrderStatus(order.status || 'Waiting');
+    const isFinished = normStatus === 'Delivered' || normStatus === 'Ready' || normStatus === 'Ready for delivery' || normStatus === 'Ready for shop';
+
+    const targetMs = getOrderTargetTime(order);
+    if (!targetMs) {
+      return { 
+        hasTimer: false, 
+        text: order.expectedDeliveryTime || order.deliveryTime || (language === 'ar' ? 'عادي' : 'Standard'),
+        isFlashing: false 
+      };
+    }
+
+    const diffMs = targetMs - time.getTime();
+    const totalSeconds = Math.floor(diffMs / 1000);
+
+    if (diffMs <= 0) {
+      return {
+        hasTimer: true,
+        text: isFinished ? (language === 'ar' ? 'مكتمل' : 'Completed') : (language === 'ar' ? 'انتهى الوقت (00:00)' : 'Time Up (00:00)'),
+        isFlashing: false,
+        isOverdue: true,
+        isFinished,
+        totalSeconds: 0
+      };
+    }
+
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    let text = '';
+    if (hours > 0) {
+      text = `${hours}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
+    } else {
+      text = `${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
+    }
+
+    // Client Requirement: Flash in green only when timer is active and <= 3 minutes (180s)
+    const isFlashing = !isFinished && totalSeconds <= 180 && totalSeconds > 0;
+
+    return {
+      hasTimer: true,
+      text,
+      isFlashing,
+      isOverdue: false,
+      isFinished,
+      totalSeconds
+    };
+  };
+
   return (
     <div className={`lcd-display-container min-h-screen font-sans flex flex-col antialiased transition-colors duration-300 ${isDark ? 'bg-slate-950 text-slate-100 selection:bg-blue-600' : 'bg-slate-100 text-slate-900 selection:bg-blue-500'}`}>
       <style>{`
@@ -293,6 +452,27 @@ const LcdDisplay = () => {
           background: inherit !important;
           background-color: transparent !important;
           color: inherit !important;
+        }
+        @keyframes greenFlashAnimation {
+          0%, 100% {
+            opacity: 1;
+            background-color: rgba(16, 185, 129, 0.35);
+            border-color: #10b981;
+            color: #6ee7b7;
+            box-shadow: 0 0 18px rgba(16, 185, 129, 0.7);
+            transform: scale(1.02);
+          }
+          50% {
+            opacity: 0.35;
+            background-color: rgba(16, 185, 129, 0.08);
+            border-color: rgba(16, 185, 129, 0.25);
+            color: #34d399;
+            box-shadow: none;
+            transform: scale(1);
+          }
+        }
+        .lcd-green-flash {
+          animation: greenFlashAnimation 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
       `}</style>
       {/* Top Banner Control Panel */}
@@ -680,7 +860,7 @@ const LcdDisplay = () => {
                           )}
                         </div>
 
-                        {/* Customer Name */}
+                        {/* Customer Name & Express Timer */}
                         <div className="flex items-center justify-between mt-1">
                           <span className={`text-sm font-bold truncate max-w-[150px] ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
                             {order.customerName}
@@ -693,6 +873,28 @@ const LcdDisplay = () => {
                             {order.serviceType || order.service || (language === 'ar' ? 'عادي' : 'Normal')}
                           </span>
                         </div>
+
+                        {/* Express Live Countdown Timer Badge */}
+                        {isExpress(order) && (() => {
+                          const rem = getRemainingTime(order);
+                          return (
+                            <div className="mt-1 pt-1.5 border-t border-slate-800/40 flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                {language === 'ar' ? 'الوقت المتبقي' : 'Remaining'}
+                              </span>
+                              <span className={`inline-flex items-center gap-1.5 text-xs font-mono font-extrabold px-2.5 py-0.5 rounded-lg transition-all duration-300 ${
+                                rem.isOverdue
+                                  ? (isDark ? 'bg-rose-500/25 text-rose-400 border border-rose-500/40 font-black shadow-md shadow-rose-500/15 animate-pulse' : 'bg-rose-100 text-rose-700 border border-rose-300 font-black')
+                                  : rem.isFlashing 
+                                    ? 'lcd-green-flash text-emerald-300 font-black' 
+                                    : (isDark ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-50 text-emerald-700 border border-emerald-200')
+                              }`}>
+                                <FiClock size={11} className={rem.isFlashing ? 'animate-spin' : ''} />
+                                <span>{rem.text}</span>
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </div>
                     ))}
                     {!hasOrders && (
@@ -719,6 +921,7 @@ const LcdDisplay = () => {
                     <th className="pb-4 pt-2 px-4 font-mono font-bold">{language === 'ar' ? 'رقم الطلب' : 'Order No'}</th>
                     <th className="pb-4 pt-2 px-4">{language === 'ar' ? 'العميل' : 'Customer'}</th>
                     <th className="pb-4 pt-2 px-4">{language === 'ar' ? 'نوع الخدمة' : 'Service Type'}</th>
+                    <th className="pb-4 pt-2 px-4 font-mono">{language === 'ar' ? 'الوقت المتبقي' : 'Remaining Time'}</th>
                     <th className="pb-4 pt-2 px-4">{language === 'ar' ? 'الحالة' : 'Status'}</th>
                     <th className="pb-4 pt-2 px-4">{language === 'ar' ? 'الفرع' : 'Branch'}</th>
                   </tr>
@@ -818,6 +1021,31 @@ const LcdDisplay = () => {
                           {order.serviceType || order.service || (language === 'ar' ? 'عادي' : 'Normal')}
                         </td>
                         <td className="py-4.5 px-4">
+                          {(() => {
+                            const rem = getRemainingTime(order);
+                            if (!rem.hasTimer && !isExpress(order)) {
+                              return (
+                                <span className={`text-sm font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                                  {rem.text || '—'}
+                                </span>
+                              );
+                            }
+
+                            return (
+                              <span className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-mono font-extrabold text-sm tracking-wider transition-all duration-300 ${
+                                rem.isOverdue
+                                  ? (isDark ? 'bg-rose-500/25 text-rose-400 border border-rose-500/50 font-black shadow-md shadow-rose-500/15 animate-pulse' : 'bg-rose-100 text-rose-700 border border-rose-300 font-black')
+                                  : rem.isFlashing
+                                    ? 'lcd-green-flash text-emerald-300 font-black'
+                                    : (isDark ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-50 text-emerald-700 border border-emerald-200')
+                              }`}>
+                                <FiClock className={rem.isFlashing ? 'animate-spin' : ''} size={14} />
+                                <span>{rem.text}</span>
+                              </span>
+                            );
+                          })()}
+                        </td>
+                        <td className="py-4.5 px-4">
                           <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-extrabold border ${statusLabelClass}`}>
                             {translateStatus(status)}
                           </span>
@@ -827,15 +1055,21 @@ const LcdDisplay = () => {
                             const branchObj = branches?.find(b => (b.id || b._id)?.toString() === (order.branchId || '').toString());
                             const branchName = branchObj ? branchObj.name : (order.branch || 'N/A');
                             if (language === 'ar') {
+                              if (branchObj && (branchObj.nameAr || branchObj.arabicName)) {
+                                return branchObj.nameAr || branchObj.arabicName;
+                              }
                               const nameLower = branchName.toLowerCase();
-                              if (nameLower.includes('ragheey')) return 'الرقعي';
+                              if (nameLower.includes('ragheey') || nameLower.includes('rigai')) return 'الرقعي';
                               if (nameLower.includes('mishrif')) return 'مشرف';
                               if (nameLower.includes('andalus')) return 'الأندلس';
                               if (nameLower.includes('ardiya')) return 'العارضية';
                               if (nameLower.includes('khaitan')) return 'خيطان';
-                              if (nameLower.includes('qurain')) return 'القرين';
+                              if (nameLower.includes('qurain') || nameLower.includes('quirain')) return 'القرين';
                               if (nameLower.includes('jahra')) return 'الجهراء';
-                              if (nameLower.includes('rigai')) return 'الرقعي';
+                              if (nameLower.includes('home')) return 'خدمة المنازل';
+                              if (nameLower.includes('workshop')) return 'الورشة';
+                              if (nameLower.includes('carpet')) return 'قسم السجاد';
+                              if (nameLower.includes('shoe')) return 'قسم الأحذية';
                             }
                             return branchName;
                           })()}
@@ -845,7 +1079,7 @@ const LcdDisplay = () => {
                   })}
                   {(viewMode === 'express' ? filteredLocalOrders.filter(isExpress) : filteredLocalOrders).length === 0 && (
                     <tr>
-                      <td colSpan="5" className={`p-12 text-center text-sm font-bold ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                      <td colSpan="6" className={`p-12 text-center text-sm font-bold ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
                         {language === 'ar' ? 'لم يتم العثور على طلبات.' : 'No orders found.'}
                       </td>
                     </tr>

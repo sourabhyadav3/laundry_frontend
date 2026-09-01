@@ -6,7 +6,7 @@ import ReusableTable from '../../Components/ReusableTable';
 import Modal from '../../Components/Modal';
 import PaymentSettleModal from '../../Components/PaymentSettleModal';
 import { toast } from 'react-toastify';
-import { exportToCSV, formatCurrency, formatDate, generateSubscriptionReceiptPDF, generateCustomerStatementPDF, getCustomerOrders } from '../../utils/exportUtils';
+import { exportToCSV, formatCurrency, formatDate, generateSubscriptionReceiptPDF, generateCustomerStatementPDF, exportCustomerStatementA4PDF, getCustomerOrders } from '../../utils/exportUtils';
 
 const Customers = () => {
   const { customers, orders = [], addCustomer, updateCustomer, deleteCustomer, settleCustomerBalance, selectedBranch, areas, branches = [] } = useContext(AdminStateContext);
@@ -363,7 +363,7 @@ const Customers = () => {
   };
 
   const tableColumns = [
-    { header: 'Customer ID', accessor: 'customerNo', cell: (row) => { const rawId = row.id; const validId = rawId && String(rawId) !== 'Auto-generated' ? rawId : null; return row.customerNo || row.displayId || validId || row._id || 'N/A'; } },
+    { header: 'Customer ID', accessor: 'customerNo', cell: (row) => { const cNo = row.customerNo; if (cNo && String(cNo) !== 'Auto-generated') return cNo; const rawId = row.id || row.displayId || row._id; return (rawId && String(rawId) !== 'Auto-generated') ? rawId : 'N/A'; } },
     {
       header: 'Name',
       accessor: 'name',
@@ -693,15 +693,26 @@ const Customers = () => {
                       {tr('Live usage, garments processed, and financial dues')}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => generateCustomerStatementPDF(selectedCustomer, customerOrders, customerStats, { branchName: selectedBranch !== 'All' ? selectedBranch : undefined })}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white text-xs font-bold transition-all border border-blue-500/20"
-                    title={tr('Print Account Statement')}
-                  >
-                    <span>📄</span>
-                    <span>{tr('Print Statement')}</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => generateCustomerStatementPDF(selectedCustomer, customerOrders, customerStats, { branchName: selectedBranch !== 'All' ? selectedBranch : undefined })}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white text-xs font-bold transition-all border border-blue-500/20"
+                      title={tr('Print Thermal Statement')}
+                    >
+                      <span>🖨️</span>
+                      <span>{tr('Thermal Slip')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => exportCustomerStatementA4PDF(selectedCustomer, customerOrders, customerStats, { branchName: selectedBranch !== 'All' ? selectedBranch : undefined })}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600/10 text-emerald-500 hover:bg-emerald-600 hover:text-white text-xs font-bold transition-all border border-emerald-500/20"
+                      title={tr('Download A4 PDF Statement')}
+                    >
+                      <span>📄</span>
+                      <span>{tr('A4 PDF Statement')}</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -854,11 +865,20 @@ const Customers = () => {
                 <button
                   type="button"
                   onClick={() => generateCustomerStatementPDF(selectedCustomer, customerOrders, customerStats, { branchName: selectedBranch !== 'All' ? selectedBranch : undefined })}
-                  className="flex-1 min-w-[180px] rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 shadow-md transition flex items-center justify-center gap-2"
-                  title={tr('Print Customer Statement')}
+                  className="flex-1 min-w-[160px] rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 shadow-md transition flex items-center justify-center gap-2"
+                  title={tr('Print Thermal Statement')}
+                >
+                  <span>🖨️</span>
+                  <span>{tr('Thermal Slip')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => exportCustomerStatementA4PDF(selectedCustomer, customerOrders, customerStats, { branchName: selectedBranch !== 'All' ? selectedBranch : undefined })}
+                  className="flex-1 min-w-[160px] rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 shadow-md transition flex items-center justify-center gap-2"
+                  title={tr('Download A4 PDF Statement')}
                 >
                   <span>📄</span>
-                  <span>{tr('Print Account Statement')}</span>
+                  <span>{tr('A4 PDF Statement')}</span>
                 </button>
                 {(selectedCustomer.isSubscriber === true || (selectedCustomer.isSubscriber !== false && Number(selectedCustomer.insuranceAmount || 0) >= 20)) && (
                   <button

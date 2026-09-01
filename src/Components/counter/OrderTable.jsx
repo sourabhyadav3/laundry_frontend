@@ -88,7 +88,26 @@ const OrderTable = ({ orders, onView, onUpdateStatus, selectedOrderIds, setSelec
       }
     },
     { header: 'Customer', accessor: 'customerName' },
-    { header: 'Branch', accessor: 'branchId', cell: (row) => getBranchName(row.branchId || row.branch) },
+    {
+      header: 'Branch',
+      accessor: 'branchId',
+      cell: (row) => {
+        const originBranchName = getBranchName(row.branchId || row.branch);
+        const hasTransferred = row.transferredTo || row.transferredBranchName;
+        const targetBranchName = row.transferredBranchName || getBranchName(row.transferredTo);
+        return (
+          <div className="flex flex-col">
+            <span className="font-semibold text-primary">{originBranchName}</span>
+            {hasTransferred && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full mt-0.5 border border-blue-500/20 w-fit" title={`Transferred to ${targetBranchName}`}>
+                <span>↳ ➔</span>
+                <span>{targetBranchName}</span>
+              </span>
+            )}
+          </div>
+        );
+      }
+    },
     {
       header: 'Service',
       accessor: 'serviceType',

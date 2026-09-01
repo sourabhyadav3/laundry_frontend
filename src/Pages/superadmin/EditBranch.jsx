@@ -2,15 +2,18 @@ import React, { useState, useContext, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { FiArrowLeft, FiSave } from 'react-icons/fi';
 import { AdminStateContext } from '../../context/AdminStateContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { toast } from 'react-toastify';
 
 const EditBranch = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { branches, updateBranch } = useContext(AdminStateContext);
+  const { language, tr } = useLanguage();
 
   const [formData, setFormData] = useState({
     name: '',
+    nameAr: '',
     address: '',
     phone: '',
     email: '',
@@ -22,12 +25,15 @@ const EditBranch = () => {
 
     const branch = branches.find(b => String(b.id) === String(id));
     if (branch) {
-      setFormData(branch);
+      setFormData({
+        ...branch,
+        nameAr: branch.nameAr || branch.arabicName || ''
+      });
     } else {
-      toast.error('Branch not found');
+      toast.error(tr('Branch not found'));
       navigate('/superadmin/branches');
     }
-  }, [id, branches, navigate]);
+  }, [id, branches, navigate, tr]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -37,12 +43,16 @@ const EditBranch = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name || !formData.address || !formData.phone) {
-      toast.error('Please fill in all required fields');
+      toast.error(tr('Please fill in all required fields'));
       return;
     }
     
-    const success = await updateBranch(id, formData);
+    const success = await updateBranch(id, {
+      ...formData,
+      arabicName: formData.nameAr || formData.arabicName || ''
+    });
     if (success) {
+      toast.success(tr('Branch updated successfully!'));
       navigate('/superadmin/branches');
     }
   };
@@ -54,21 +64,39 @@ const EditBranch = () => {
           <FiArrowLeft size={20} />
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-primary">Edit Branch</h1>
-          <p className="text-sm text-secondary">Update branch details</p>
+          <h1 className="text-2xl font-bold text-primary">{tr('Edit Branch')}</h1>
+          <p className="text-sm text-secondary">{tr('Update branch details')}</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="surface-card p-6 rounded-2xl border border-border space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-primary">Branch Name *</label>
+            <label className="text-sm font-medium text-primary">
+              {language === 'ar' ? 'اسم الفرع (بالإنجليزية) *' : 'Branch Name (English) *'}
+            </label>
             <input 
               type="text" 
               name="name"
               value={formData.name}
               onChange={handleChange}
               className="w-full input-field rounded-xl border border-border px-4 py-2 bg-surface-alt"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-primary">
+              {language === 'ar' ? 'اسم الفرع (بالعربية)' : 'Branch Name (Arabic)'}
+            </label>
+            <input 
+              type="text" 
+              name="nameAr"
+              value={formData.nameAr}
+              onChange={handleChange}
+              className="w-full input-field rounded-xl border border-border px-4 py-2 bg-surface-alt text-right"
+              placeholder="مثال: قسم السجاد / فرع حولي"
+              dir="rtl"
             />
           </div>
 
