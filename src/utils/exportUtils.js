@@ -2454,7 +2454,7 @@ export const generateShiftSettlementPDF = (shiftData, options = {}) => {
       <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; font-weight: 700;">
         ${st.staffName || st.name}
         <div style="font-size: 8px; color: #555; font-weight: normal; margin-top: 1px;">
-          <span style="font-weight: 700; color: #2563eb;">[${st.shift || (st.shiftKey === 'Morning' ? 'Morning / صباحية' : 'Evening / مسائية')}]</span> | 💵 Cash: ${formatCurrency(st.cashCollected || 0)} | 💳 K-Net: ${formatCurrency(st.knetCollected || 0)} | 🎟️ Bukey: ${formatCurrency(st.bukeyCollected || 0)} | 💰 Credit: ${formatCurrency(st.creditCollected || st.creditPending || 0)}
+          <span style="font-weight: 700; color: #2563eb;">[${st.shift || (st.shiftKey === 'Morning' ? 'Morning / صباحية' : 'Evening / مسائية')}]</span> | 💵 Cash: ${formatCurrency(st.cashCollected || 0)} | 💳 K-Net: ${formatCurrency(st.knetCollected || 0)} | 🎟️ Bukey: ${formatCurrency(st.bukeyCollected || 0)} | 💰 Credit: ${formatCurrency(st.creditCollected || st.creditPending || 0)}${(st.cashExpenses || 0) > 0 ? ` | 💸 Exp: ${formatCurrency(st.cashExpenses || 0)}` : ''}
         </div>
       </td>
       <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; text-align: center; vertical-align: top;">${st.invoicesCount || st.count || 0}</td>

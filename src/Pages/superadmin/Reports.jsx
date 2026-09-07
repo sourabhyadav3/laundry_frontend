@@ -189,8 +189,8 @@ const Reports = () => {
       case 'shift_settlement':
         return [
           { value: 'All Day', label: language === 'ar' ? 'اليوم الكامل (جميع الورديات)' : 'All Day (Full Day)' },
-          { value: 'Morning', label: language === 'ar' ? 'الوردية الصباحية (Morning Shift)' : 'Morning Shift (Before 3 PM)' },
-          { value: 'Evening', label: language === 'ar' ? 'الوردية المسائية (Evening Shift)' : 'Evening Shift (After 3 PM)' }
+          { value: 'Morning', label: language === 'ar' ? 'الوردية الصباحية (Morning Shift: 10 AM - 10 PM)' : 'Morning Shift (10:00 AM - 10:00 PM)' },
+          { value: 'Evening', label: language === 'ar' ? 'الوردية المسائية (Evening Shift: 10 PM - 10 AM)' : 'Evening Shift (10:00 PM - 10:00 AM)' }
         ];
       default:
         return [
@@ -321,6 +321,7 @@ const Reports = () => {
           { header: language === 'ar' ? 'كي نت' : 'K-Net', accessor: 'knetCollected', format: (val) => formatCurrency(val) },
           { header: language === 'ar' ? 'بوكيه / باقات' : 'Bukey', accessor: 'bukeyCollected', format: (val) => formatCurrency(val) },
           { header: language === 'ar' ? 'آجل / متبقي' : 'Credit / Pending', accessor: 'creditCollected', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'المصروفات' : 'Expenses', accessor: 'cashExpenses', format: (val) => formatCurrency(val) },
           { header: language === 'ar' ? 'صافي الكاش للإيداع' : 'Net Cash for Deposit', accessor: 'netCashInHand', format: (val) => formatCurrency(val) },
         ];
         break;

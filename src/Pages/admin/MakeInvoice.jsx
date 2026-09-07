@@ -2012,54 +2012,57 @@ const MakeInvoice = () => {
                             </div>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-1.5 shrink-0" ref={catalogMenuRef}>
-                            <div className="relative">
-                                <button 
-                                    type="button" 
-                                    onClick={() => setIsCatalogMenuOpen(!isCatalogMenuOpen)} 
-                                    className="p-1.5 rounded-lg hover:bg-surface-alt border border-transparent hover:border-border/50 text-secondary transition-colors"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
-                                </button>
-                                
-                                {isCatalogMenuOpen && (
-                                    <div
-                                        className="catalog-menu-dropdown absolute end-0 top-full mt-1 min-w-[14rem] w-max bg-surface border border-border shadow-xl rounded-xl z-[200] py-1"
-                                        dir={language === 'ar' ? 'rtl' : 'ltr'}
+                        {/* Catalog management menu (three dots) - hidden per user request, can be easily re-enabled anytime */}
+                        {false && (
+                            <div className="flex flex-wrap items-center gap-1.5 shrink-0" ref={catalogMenuRef}>
+                                <div className="relative">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setIsCatalogMenuOpen(!isCatalogMenuOpen)} 
+                                        className="p-1.5 rounded-lg hover:bg-surface-alt border border-transparent hover:border-border/50 text-secondary transition-colors"
                                     >
-                                        <button 
-                                            type="button" 
-                                            onClick={() => { setShowAddCatalogModal(true); setIsCatalogMenuOpen(false); }} 
-                                            className="w-full text-start px-3 py-2.5 text-xs hover:bg-surface-alt font-semibold text-slate-600 flex items-center gap-2 transition-colors whitespace-nowrap"
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
+                                    </button>
+                                    
+                                    {isCatalogMenuOpen && (
+                                        <div
+                                            className="catalog-menu-dropdown absolute end-0 top-full mt-1 min-w-[14rem] w-max bg-surface border border-border shadow-xl rounded-xl z-[200] py-1"
+                                            dir={language === 'ar' ? 'rtl' : 'ltr'}
                                         >
-                                            ➕ {t('counter.makeInvoice.addCatalog')}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setEditCatalogMode(prev => !prev);
-                                                if (removeCatalogMode) setRemoveCatalogMode(false);
-                                                setIsCatalogMenuOpen(false);
-                                            }}
-                                            className={`w-full text-start px-3 py-2.5 text-xs hover:bg-surface-alt font-semibold flex items-center gap-2 transition-colors whitespace-nowrap ${editCatalogMode ? 'text-amber-600 bg-amber-50' : 'text-slate-600'}`}
-                                        >
-                                            {editCatalogMode ? `✖ ${t('counter.makeInvoice.doneEditing')}` : `✏️ ${t('counter.makeInvoice.editCatalog')}`}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setRemoveCatalogMode(prev => !prev);
-                                                if (editCatalogMode) setEditCatalogMode(false);
-                                                setIsCatalogMenuOpen(false);
-                                            }}
-                                            className={`w-full text-start px-3 py-2.5 text-xs hover:bg-surface-alt font-semibold flex items-center gap-2 transition-colors whitespace-nowrap ${removeCatalogMode ? 'text-rose-600 bg-rose-50' : 'text-slate-600'}`}
-                                        >
-                                            {removeCatalogMode ? `✖ ${t('counter.makeInvoice.doneRemoving')}` : `🗑️ ${t('counter.makeInvoice.removeCatalog')}`}
-                                        </button>
-                                    </div>
-                                )}
+                                            <button 
+                                                type="button" 
+                                                onClick={() => { setShowAddCatalogModal(true); setIsCatalogMenuOpen(false); }} 
+                                                className="w-full text-start px-3 py-2.5 text-xs hover:bg-surface-alt font-semibold text-slate-600 flex items-center gap-2 transition-colors whitespace-nowrap"
+                                            >
+                                                ➕ {t('counter.makeInvoice.addCatalog')}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setEditCatalogMode(prev => !prev);
+                                                    if (removeCatalogMode) setRemoveCatalogMode(false);
+                                                    setIsCatalogMenuOpen(false);
+                                                }}
+                                                className={`w-full text-start px-3 py-2.5 text-xs hover:bg-surface-alt font-semibold flex items-center gap-2 transition-colors whitespace-nowrap ${editCatalogMode ? 'text-amber-600 bg-amber-50' : 'text-slate-600'}`}
+                                            >
+                                                {editCatalogMode ? `✖ ${t('counter.makeInvoice.doneEditing')}` : `✏️ ${t('counter.makeInvoice.editCatalog')}`}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setRemoveCatalogMode(prev => !prev);
+                                                    if (editCatalogMode) setEditCatalogMode(false);
+                                                    setIsCatalogMenuOpen(false);
+                                                }}
+                                                className={`w-full text-start px-3 py-2.5 text-xs hover:bg-surface-alt font-semibold flex items-center gap-2 transition-colors whitespace-nowrap ${removeCatalogMode ? 'text-rose-600 bg-rose-50' : 'text-slate-600'}`}
+                                            >
+                                                {removeCatalogMode ? `✖ ${t('counter.makeInvoice.doneRemoving')}` : `🗑️ ${t('counter.makeInvoice.removeCatalog')}`}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
 
                     {/* Scrolling Grid */}
