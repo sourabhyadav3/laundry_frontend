@@ -356,17 +356,18 @@ const PaymentSettleModal = ({
             <label className="text-xs font-bold uppercase tracking-wider text-secondary">
               {isAr ? 'طريقة الدفع:' : 'Payment Method:'}
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {[
                 { id: 'Cash', label: isAr ? 'نقدي' : 'Cash', icon: '💵' },
+                { id: 'Bukey', label: isAr ? 'بوكيه' : 'Bukey', icon: '🎟️' },
                 { id: 'K-Net', label: isAr ? 'كي نت' : 'K-Net', icon: '💳' },
-                { id: 'Card', label: isAr ? 'بطاقة' : 'Card', icon: '💳' },
+                { id: 'Credit', label: isAr ? 'آجل' : 'Credit', icon: '💰' },
               ].map((m) => (
                 <button
                   key={m.id}
                   type="button"
                   onClick={() => setPaymentMethod(m.id)}
-                  className={`flex flex-col items-center justify-center p-2 rounded-xl border text-xs font-bold transition ${
+                  className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-bold transition ${
                     paymentMethod === m.id
                       ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                       : 'border-border bg-surface text-secondary hover:text-primary hover:border-blue-500'

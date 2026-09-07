@@ -37,7 +37,7 @@ const orderStatuses = [
   'Store',
 ];
 const paymentStatuses = ['Paid', 'Pending', 'Partial'];
-const paymentMethods = ['Cash', 'Card', 'Link', 'Wamd'];
+const paymentMethods = ['Cash', 'Bukey', 'K-Net', 'Credit'];
 
 const pickupStatuses = ['Assigned', 'In Progress', 'Picked Up', 'Completed'];
 const deliveryStatuses = ['Assigned', 'Out For Delivery', 'Delivered', 'Failed'];

@@ -9,7 +9,7 @@ import ExportMenu from '../../Components/ExportMenu';
 import { exportPaymentsCSV, exportPaymentsPDF, formatCurrency, formatDate } from '../../utils/exportUtils';
 import { useLanguage } from '../../context/LanguageContext';
 
-const paymentMethods = ['Cash', 'Card', 'Link', 'Credit', 'Wamd'];
+const paymentMethods = ['Cash', 'Bukey', 'K-Net', 'Credit'];
 const paymentStatuses = ['Paid', 'Partial', 'Pending'];
 
 const paymentStatusColors = {
@@ -589,6 +589,9 @@ const Payments = () => {
                         {method}
                       </option>
                     ))}
+                    {editPaymentData.method && !paymentMethods.includes(editPaymentData.method) && (
+                      <option value={editPaymentData.method}>{editPaymentData.method}</option>
+                    )}
                   </select>
                   <FiChevronDown className="pointer-events-none absolute right-4 top-[3.2rem] -translate-y-1/2 text-secondary" />
                 </div>

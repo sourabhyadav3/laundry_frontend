@@ -123,7 +123,7 @@ const Reports = () => {
     summary: { totalRevenue: 0, totalOrders: 0, completedOrders: 0, pendingOrders: 0, activeCustomers: 0, averageOrderValue: 0 },
     periodOrders: [],
     serviceRevenue: { washing: 0, dryCleaning: 0, ironing: 0, premium: 0 },
-    paymentDistribution: { Cash: 0, Card: 0, Link: 0, Wamd: 0 },
+    paymentDistribution: { Cash: 0, 'K-Net': 0, Bukey: 0, Credit: 0 },
     periodPayments: []
   });
   const [, setLoadingDashboard] = useState(false);
