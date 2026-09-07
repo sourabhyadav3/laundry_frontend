@@ -7,12 +7,49 @@ import { formatCurrency } from '../../utils/exportUtils';
 import { FiCreditCard, FiClock, FiPieChart, FiList } from 'react-icons/fi';
 
 const Payments = () => {
-  const { payments } = useContext(AdminStateContext);
+  const { payments, selectedBranch, branches, orders } = useContext(AdminStateContext);
   const [searchTerm, setSearchTerm] = useState('');
   const today = new Date().toDateString();
 
+  const branchPayments = useMemo(() => {
+    if (!selectedBranch || selectedBranch === 'All') return payments;
+    const selStr = String(selectedBranch).toLowerCase();
+    const activeBranchObj = branches?.find(b => String(b.id || b._id).toLowerCase() === selStr || String(b.name || '').toLowerCase() === selStr);
+    const bId = activeBranchObj ? String(activeBranchObj.id || activeBranchObj._id).toLowerCase() : selStr;
+    const bName = activeBranchObj ? String(activeBranchObj.name || '').toLowerCase() : selStr;
+    const bNameAr = activeBranchObj ? String(activeBranchObj.nameAr || activeBranchObj.arabicName || '').toLowerCase() : '';
+
+    const isCarpetBranch = bName.includes('carpet') || bName.includes('rug') || bNameAr.includes('سجاد');
+    const isShoeBranch = bName.includes('shoe') || bName.includes('footwear') || bNameAr.includes('أحذية') || bNameAr.includes('حذاء') || bNameAr.includes('جوتي');
+    const isWorkshopBranch = bName.includes('workshop') || bNameAr.includes('ورشة');
+
+    return payments.filter(p => {
+      if (p.branchId && (String(p.branchId).toLowerCase() === bId || String(p.branchId).toLowerCase() === selStr)) return true;
+      if (p.branch && (String(p.branch).toLowerCase() === bId || String(p.branch).toLowerCase() === bName)) return true;
+
+      const associatedOrder = orders?.find(o => (o.id && (o.id === p.orderId || o.id === p.order)) || (o.number && o.number === p.orderNumber));
+      if (associatedOrder) {
+        if (associatedOrder.branchId && String(associatedOrder.branchId).toLowerCase() === bId) return true;
+        if (associatedOrder.transferredTo && String(associatedOrder.transferredTo).toLowerCase() === bId) return true;
+        if (associatedOrder.transferredBranchName && String(associatedOrder.transferredBranchName).toLowerCase() === bName) return true;
+        if (Array.isArray(associatedOrder.sharedBranches) && associatedOrder.sharedBranches.some(b => String(b).toLowerCase() === bId)) return true;
+
+        if (isCarpetBranch && Array.isArray(associatedOrder.itemDetails)) {
+          if (associatedOrder.itemDetails.some(it => /carpet|سجاد|rug/i.test(it.name || '') || /carpet|سجاد|rug/i.test(it.nameAr || ''))) return true;
+        }
+        if (isShoeBranch && Array.isArray(associatedOrder.itemDetails)) {
+          if (associatedOrder.itemDetails.some(it => /shoe|sneaker|boot|footwear|أحذية|حذاء|جوتي|شوز/i.test(it.name || '') || /أحذية|حذاء|جوتي|شوز|shoe/i.test(it.nameAr || ''))) return true;
+        }
+        if (isWorkshopBranch && (associatedOrder.status === 'Preparing in workshop' || associatedOrder.status === 'In Workshop' || (Array.isArray(associatedOrder.itemDetails) && associatedOrder.itemDetails.some(it => /carpet|curtain|blanket|heavy|سجاد|ستائر|بطانية|لحاف/i.test(it.name || ''))))) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }, [payments, orders, selectedBranch, branches]);
+
   const stats = useMemo(() => {
-    let result = payments;
+    let result = branchPayments;
     const todayPayments = result.filter((p) => new Date(p.date).toDateString() === today);
     return {
       todayCollection: todayPayments.filter((p) => p.status === 'Paid').reduce((s, p) => s + p.amount, 0),
@@ -20,11 +57,11 @@ const Payments = () => {
       partial: result.filter((p) => p.status === 'Partial').length,
       totalTransactions: result.length,
     };
-  }, [payments, today]);
+  }, [branchPayments, today]);
 
   const filteredPayments = useMemo(
     () => {
-      let result = payments;
+      let result = branchPayments;
       return result
         .filter(
           (p) =>
@@ -42,7 +79,7 @@ const Payments = () => {
           return String(b.id || '').localeCompare(String(a.id || ''));
         });
     },
-    [payments, searchTerm]
+    [branchPayments, searchTerm]
   );
 
   return (

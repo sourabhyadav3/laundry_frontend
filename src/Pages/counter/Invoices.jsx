@@ -12,7 +12,7 @@ const statusOrder = ORDER_STATUSES;
 const PAYMENT_STATUSES = ['Paid', 'Pending', 'Partial'];
 
 const Invoices = () => {
-  const { orders, catalog, updateOrderStatus, selectedBranch, updateOrderPaymentStatus, addPayment } = useContext(AdminStateContext);
+  const { orders, catalog, updateOrderStatus, selectedBranch, branches, updateOrderPaymentStatus, addPayment } = useContext(AdminStateContext);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
   
@@ -146,12 +146,50 @@ const Invoices = () => {
   const filteredOrders = useMemo(
     () =>
       orders
-        .filter(
-          (o) =>
-            (!selectedBranch || selectedBranch === 'All' || o.branchId === selectedBranch || o.branch === selectedBranch) &&
-            (o.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              o.customerName.toLowerCase().includes(searchTerm.toLowerCase()))
-        )
+        .filter((o) => {
+          const matchesBranch = (() => {
+            if (!selectedBranch || selectedBranch === 'All') return true;
+            const selStr = String(selectedBranch).toLowerCase();
+            if (o.branchId && String(o.branchId).toLowerCase() === selStr) return true;
+            if (o.branch && String(o.branch).toLowerCase() === selStr) return true;
+            if (o.transferredTo && String(o.transferredTo).toLowerCase() === selStr) return true;
+            if (o.transferredBranchName && String(o.transferredBranchName).toLowerCase() === selStr) return true;
+            if (Array.isArray(o.sharedBranches) && o.sharedBranches.some(b => String(b).toLowerCase() === selStr)) return true;
+
+            const activeBranchObj = branches?.find(b => String(b.id || b._id).toLowerCase() === selStr || String(b.name || '').toLowerCase() === selStr);
+            if (activeBranchObj) {
+              const bId = String(activeBranchObj.id || activeBranchObj._id).toLowerCase();
+              const bName = String(activeBranchObj.name || '').toLowerCase();
+              const bNameAr = String(activeBranchObj.nameAr || activeBranchObj.arabicName || '').toLowerCase();
+              if (o.branchId && String(o.branchId).toLowerCase() === bId) return true;
+              if (o.transferredTo && String(o.transferredTo).toLowerCase() === bId) return true;
+              if (o.transferredBranchName && String(o.transferredBranchName).toLowerCase() === bName) return true;
+              if (Array.isArray(o.sharedBranches) && o.sharedBranches.some(b => String(b).toLowerCase() === bId)) return true;
+
+              // Section Branch item checking
+              const isCarpetBranch = bName.includes('carpet') || bName.includes('rug') || bNameAr.includes('سجاد');
+              const isShoeBranch = bName.includes('shoe') || bName.includes('footwear') || bNameAr.includes('أحذية') || bNameAr.includes('حذاء') || bNameAr.includes('جوتي');
+              const isWorkshopBranch = bName.includes('workshop') || bNameAr.includes('ورشة');
+
+              if (isCarpetBranch && Array.isArray(o.itemDetails)) {
+                if (o.itemDetails.some(it => /carpet|سجاد|rug/i.test(it.name || '') || /carpet|سجاد|rug/i.test(it.nameAr || ''))) return true;
+              }
+              if (isShoeBranch && Array.isArray(o.itemDetails)) {
+                if (o.itemDetails.some(it => /shoe|sneaker|boot|footwear|أحذية|حذاء|جوتي|شوز/i.test(it.name || '') || /أحذية|حذاء|جوتي|شوز|shoe/i.test(it.nameAr || ''))) return true;
+              }
+              if (isWorkshopBranch && (o.status === 'Preparing in workshop' || o.status === 'In Workshop' || (Array.isArray(o.itemDetails) && o.itemDetails.some(it => /carpet|curtain|blanket|heavy|سجاد|ستائر|بطانية|لحاف/i.test(it.name || ''))))) {
+                return true;
+              }
+            }
+            return false;
+          })();
+
+          const matchesSearch =
+            o.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            o.customerName.toLowerCase().includes(searchTerm.toLowerCase());
+
+          return matchesBranch && matchesSearch;
+        })
         .sort((a, b) => {
           if (a.createdAt && b.createdAt) {
             return new Date(b.createdAt) - new Date(a.createdAt);
@@ -161,7 +199,7 @@ const Invoices = () => {
           if (!isNaN(numA) && !isNaN(numB)) return numB - numA;
           return String(b.id || '').localeCompare(String(a.id || ''));
         }),
-    [orders, searchTerm, selectedBranch]
+    [orders, searchTerm, selectedBranch, branches]
   );
 
   const handleUpdateStatus = (order) => {

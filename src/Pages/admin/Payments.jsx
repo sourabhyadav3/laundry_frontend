@@ -7,6 +7,7 @@ import ReusableTable from '../../Components/ReusableTable';
 import { toast } from 'react-toastify';
 import ExportMenu from '../../Components/ExportMenu';
 import { exportPaymentsCSV, exportPaymentsPDF, formatCurrency, formatDate } from '../../utils/exportUtils';
+import { useLanguage } from '../../context/LanguageContext';
 
 const paymentMethods = ['Cash', 'Card', 'Link', 'Credit', 'Wamd'];
 const paymentStatuses = ['Paid', 'Partial', 'Pending'];
@@ -18,7 +19,8 @@ const paymentStatusColors = {
 };
 
 const Payments = () => {
-  const { payments, customers, settleCustomerBalance, updatePayment, addPayment, orders } = useContext(AdminStateContext);
+  const { language, t } = useLanguage();
+  const { payments, customers, settleCustomerBalance, updatePayment, addPayment, orders, selectedBranch, branches } = useContext(AdminStateContext);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [methodFilter, setMethodFilter] = useState('All');
@@ -29,7 +31,9 @@ const Payments = () => {
 
   const [showMarkPaidModal, setShowMarkPaidModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [selectedMethod, setSelectedMethod] = useState('Cash');
+  const [paymentMode, setPaymentMode] = useState('full');
+  const [amountReceived, setAmountReceived] = useState('');
+  const [paymentStep, setPaymentStep] = useState('select');
 
   // States for Record Payment modal
   const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
@@ -45,18 +49,71 @@ const Payments = () => {
     setShowEditModal(true);
   };
 
+  const branchPayments = useMemo(() => {
+    if (!selectedBranch || selectedBranch === 'All') return payments;
+    const selStr = String(selectedBranch).toLowerCase();
+    const activeBranchObj = branches?.find(b => String(b.id || b._id).toLowerCase() === selStr || String(b.name || '').toLowerCase() === selStr);
+    const bId = activeBranchObj ? String(activeBranchObj.id || activeBranchObj._id).toLowerCase() : selStr;
+    const bName = activeBranchObj ? String(activeBranchObj.name || '').toLowerCase() : selStr;
+    const bNameAr = activeBranchObj ? String(activeBranchObj.nameAr || activeBranchObj.arabicName || '').toLowerCase() : '';
+
+    const isCarpetBranch = bName.includes('carpet') || bName.includes('rug') || bNameAr.includes('سجاد');
+    const isShoeBranch = bName.includes('shoe') || bName.includes('footwear') || bNameAr.includes('أحذية') || bNameAr.includes('حذاء') || bNameAr.includes('جوتي');
+    const isWorkshopBranch = bName.includes('workshop') || bNameAr.includes('ورشة');
+
+    return payments.filter(p => {
+      if (p.branchId && (String(p.branchId).toLowerCase() === bId || String(p.branchId).toLowerCase() === selStr)) return true;
+      if (p.branch && (String(p.branch).toLowerCase() === bId || String(p.branch).toLowerCase() === bName)) return true;
+
+      // Match via associated order
+      const associatedOrder = orders.find(o => (o.id && (o.id === p.orderId || o.id === p.order)) || (o.number && o.number === p.orderNumber));
+      if (associatedOrder) {
+        if (associatedOrder.branchId && String(associatedOrder.branchId).toLowerCase() === bId) return true;
+        if (associatedOrder.transferredTo && String(associatedOrder.transferredTo).toLowerCase() === bId) return true;
+        if (associatedOrder.transferredBranchName && String(associatedOrder.transferredBranchName).toLowerCase() === bName) return true;
+        if (Array.isArray(associatedOrder.sharedBranches) && associatedOrder.sharedBranches.some(b => String(b).toLowerCase() === bId)) return true;
+
+        if (isCarpetBranch && Array.isArray(associatedOrder.itemDetails)) {
+          if (associatedOrder.itemDetails.some(it => /carpet|سجاد|rug/i.test(it.name || '') || /carpet|سجاد|rug/i.test(it.nameAr || ''))) return true;
+        }
+        if (isShoeBranch && Array.isArray(associatedOrder.itemDetails)) {
+          if (associatedOrder.itemDetails.some(it => /shoe|sneaker|boot|footwear|أحذية|حذاء|جوتي|شوز/i.test(it.name || '') || /أحذية|حذاء|جوتي|شوز|shoe/i.test(it.nameAr || ''))) return true;
+        }
+        if (isWorkshopBranch && (associatedOrder.status === 'Preparing in workshop' || associatedOrder.status === 'In Workshop' || (Array.isArray(associatedOrder.itemDetails) && associatedOrder.itemDetails.some(it => /carpet|curtain|blanket|heavy|سجاد|ستائر|بطانية|لحاف/i.test(it.name || ''))))) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }, [payments, orders, selectedBranch, branches]);
+
+  const branchCustomers = useMemo(() => {
+    if (!selectedBranch || selectedBranch === 'All') return customers;
+    const selStr = String(selectedBranch).toLowerCase();
+    const activeBranchObj = branches?.find(b => String(b.id || b._id).toLowerCase() === selStr || String(b.name || '').toLowerCase() === selStr);
+    const bId = activeBranchObj ? String(activeBranchObj.id || activeBranchObj._id).toLowerCase() : selStr;
+    const bName = activeBranchObj ? String(activeBranchObj.name || '').toLowerCase() : selStr;
+
+    return customers.filter(c => {
+      if (c.branchId && (String(c.branchId).toLowerCase() === bId || String(c.branchId).toLowerCase() === selStr)) return true;
+      if (c.branch && (String(c.branch).toLowerCase() === bId || String(c.branch).toLowerCase() === bName)) return true;
+      return false;
+    });
+  }, [customers, selectedBranch, branches]);
+
   // Calculate summary stats
-  const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
-  const paidAmount = payments.filter((p) => p.status === 'Paid').reduce((sum, p) => sum + p.amount, 0);
-  const outstandingAmount = customers.reduce((sum, c) => sum + c.balance, 0);
-  const dueCustomers = customers.filter((c) => c.balance > 0).length;
+  const totalRevenue = branchPayments.reduce((sum, p) => sum + p.amount, 0);
+  const paidAmount = branchPayments.filter((p) => p.status === 'Paid').reduce((sum, p) => sum + p.amount, 0);
+  const outstandingAmount = branchCustomers.reduce((sum, c) => sum + c.balance, 0);
+  const dueCustomers = branchCustomers.filter((c) => c.balance > 0).length;
 
   const filteredPayments = useMemo(() => {
-    return payments
+    return branchPayments
       .filter((payment) => {
         const matchesSearch =
           (payment.orderNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (payment.customerName || '').toLowerCase().includes(searchTerm.toLowerCase());
+          (payment.customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (payment.paymentId || '').toLowerCase().includes(searchTerm.toLowerCase());
 
         const matchesStatus = statusFilter === 'All' || payment.status === statusFilter;
         const matchesMethod = methodFilter === 'All' || payment.method === methodFilter;
@@ -72,9 +129,9 @@ const Payments = () => {
         if (!isNaN(numA) && !isNaN(numB)) return numB - numA;
         return String(b.id || '').localeCompare(String(a.id || ''));
       });
-  }, [payments, searchTerm, statusFilter, methodFilter]);
+  }, [branchPayments, searchTerm, statusFilter, methodFilter]);
 
-  const duePayments = customers.filter((c) => c.balance > 0);
+  const duePayments = branchCustomers.filter((c) => c.balance > 0);
 
   const handleViewPayment = (payment) => {
     setSelectedPayment(payment);
@@ -162,23 +219,45 @@ const Payments = () => {
 
   const handleMarkPaid = (customer) => {
     setSelectedCustomer(customer);
-    setSelectedMethod('Cash');
+    setPaymentMode('full');
+    setAmountReceived(String(Number(customer.balance || 0).toFixed(3)));
+    setPaymentStep('select');
     setShowMarkPaidModal(true);
   };
 
-  const handleConfirmPayment = async () => {
+  const handleSettleAndPay = async (method) => {
     if (!selectedCustomer) return;
-
-    const paidAmountValue = selectedCustomer.balance;
-    if (paidAmountValue <= 0) {
-      toast.warning('Customer has no outstanding balance');
+    const maxBalance = Number(selectedCustomer.balance || 0);
+    if (maxBalance <= 0) {
+      toast.warning(language === 'ar' ? 'العميل ليس لديه رصيد مستحق' : 'Customer has no outstanding balance');
       return;
     }
 
-    const success = await settleCustomerBalance(selectedCustomer.id, selectedMethod);
-    if (success) {
-      toast.success(`Payment of ${formatCurrency(paidAmountValue)} via ${selectedMethod} recorded successfully for ${selectedCustomer.name}`);
+    const received = paymentMode === 'full' ? maxBalance : Number(amountReceived);
+    if (isNaN(received) || received <= 0) {
+      toast.error(language === 'ar' ? 'يرجى إدخال مبلغ صالح أكبر من صفر' : 'Please enter a valid amount greater than 0');
+      return;
+    }
+    if (received > maxBalance + 0.001) {
+      toast.error(language === 'ar' ? 'المبلغ لا يمكن أن يكون أكبر من الرصيد المستحق' : 'Amount cannot be greater than outstanding balance');
+      return;
+    }
+
+    const branchIdToUse = (selectedBranch && selectedBranch !== 'All') 
+      ? selectedBranch 
+      : (selectedCustomer.branchId || selectedCustomer.branch || '');
+
+    const res = await settleCustomerBalance(selectedCustomer.id || selectedCustomer._id, {
+      method,
+      amount: received,
+      branchId: branchIdToUse
+    });
+
+    if (res) {
+      toast.success(`✅ Payment of ${formatCurrency(received)} recorded via ${method} for ${selectedCustomer.name}`);
       setShowMarkPaidModal(false);
+      setPaymentStep('select');
+      setSelectedCustomer(null);
     }
   };
 
@@ -357,9 +436,10 @@ const Payments = () => {
                     <p className="text-sm text-secondary font-mono">{customer.phone}</p>
                     <button
                       onClick={() => handleMarkPaid(customer)}
-                      className="rounded-2xl bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 shadow-sm"
+                      className="rounded-2xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-bold text-white transition shadow-md active:scale-95 flex items-center gap-1.5"
                     >
-                      Mark Paid
+                      <span>💳</span>
+                      <span>{t('counter.makeInvoice.settleAndPay') || 'Settle & Pay'}</span>
                     </button>
                   </div>
                 </div>
@@ -562,75 +642,145 @@ const Payments = () => {
         document.body
       )}
 
-      {/* Mark As Paid Selection Modal */}
-      {showMarkPaidModal && selectedCustomer && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div className="surface-card max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-border p-5 sm:p-8 shadow-2xl">
-            <div className="flex items-center justify-between gap-4 border-b border-border pb-6">
-              <h2 className="text-2xl font-semibold text-primary">💳 Settle & Pay</h2>
-              <button type="button" onClick={() => setShowMarkPaidModal(false)} className="text-secondary hover:text-primary">
-                ✕
-              </button>
-            </div>
+      {/* ===== SETTLE & PAY MODAL ===== */}
+      {showMarkPaidModal && selectedCustomer && (
+        <div className="fixed -inset-4 z-[2000] flex items-center justify-center p-4 sm:p-6" style={{ backdropFilter: 'blur(8px)', backgroundColor: 'rgba(15,23,42,0.45)' }}>
+          <div className="w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden border border-border bg-surface text-primary" onClick={e => e.stopPropagation()}>
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-1">
+                <h2 className="text-lg font-extrabold tracking-tight">
+                  {paymentStep === 'select' && `💳 ${t('counter.makeInvoice.settleAndPay') || 'Settle & Pay'}`}
+                  {paymentStep === 'card' && `💳 ${t('counter.makeInvoice.cardPayment') || 'Card Payment'}`}
+                  {paymentStep === 'link' && `🔗 ${t('counter.makeInvoice.linkPayment') || 'Link Payment'}`}
+                  {paymentStep === 'wamt' && `💰 ${t('counter.makeInvoice.creditPayment') || 'Credit Payment'}`}
+                </h2>
+                <button
+                  onClick={() => { setShowMarkPaidModal(false); setPaymentStep('select'); }}
+                  className="text-slate-400 hover:text-slate-600 text-xl font-bold leading-none"
+                >✕</button>
+              </div>
 
-            <div className="mt-6 space-y-5">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-secondary">Customer</p>
-                <p className="mt-1 text-lg font-semibold text-primary">{selectedCustomer.name}</p>
+              <div className="text-xs mb-4 text-secondary">
+                <p className="font-semibold text-primary">{selectedCustomer.name}</p>
+                <p className="mt-0.5">
+                  Total Outstanding: <span className="font-mono font-bold text-emerald-500">{formatCurrency(selectedCustomer.balance || 0)}</span>
+                  {paymentStep !== 'select' && (
+                    <button onClick={() => setPaymentStep('select')} className="ml-3 text-blue-500 hover:underline text-[11px]">← {t('counter.makeInvoice.back') || 'Back'}</button>
+                  )}
+                </p>
               </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-secondary">Outstanding Balance</p>
-                <p className="mt-1 text-2xl font-bold text-amber-500">{formatCurrency(selectedCustomer.balance)}</p>
-              </div>
-              
-              <div className="border-t border-border pt-4">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-secondary mb-3">Select Payment Method</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { method: 'Cash', icon: '💵', bg: 'linear-gradient(135deg,#059669,#10b981)', shadow: 'rgba(16,185,129,0.4)', payMethod: 'Cash' },
-                    { method: 'Card', icon: '💳', bg: 'linear-gradient(135deg,#3b82f6,#4f46e5)', shadow: 'rgba(59,130,246,0.4)', payMethod: 'Card' },
-                    { method: 'Link', icon: '🔗', bg: 'linear-gradient(135deg,#f59e0b,#d97706)', shadow: 'rgba(245,158,11,0.4)', payMethod: 'Link' },
-                    { method: 'Credit', icon: '💰', bg: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', shadow: 'rgba(139,92,246,0.4)', payMethod: 'Credit' },
-                  ].map(({ method, icon, bg, shadow, payMethod }) => {
-                    const isActive = selectedMethod === payMethod;
-                    return (
+
+              {/* ── STEP: SELECT ── */}
+              {paymentStep === 'select' && (
+                <div className="space-y-4">
+                  {/* Payment Type Selector */}
+                  <div className="bg-surface-alt/50 border border-border p-1 rounded-2xl flex gap-1 text-xs font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentMode('full');
+                        setAmountReceived(String(Number(selectedCustomer.balance || 0).toFixed(3)));
+                      }}
+                      className={`flex-1 py-2 text-center rounded-xl transition-all duration-200 ${paymentMode === 'full' ? 'bg-surface text-primary shadow-sm' : 'text-secondary hover:text-primary'}`}
+                    >
+                      {language === 'ar' ? 'دفع كامل' : 'Full Payment'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMode('partial')}
+                      className={`flex-1 py-2 text-center rounded-xl transition-all duration-200 ${paymentMode === 'partial' ? 'bg-surface text-primary shadow-sm' : 'text-secondary hover:text-primary'}`}
+                    >
+                      {language === 'ar' ? 'دفع جزئي' : 'Partial'}
+                    </button>
+                  </div>
+
+                  {/* Amount Received Input */}
+                  {paymentMode === 'partial' && (
+                    <div className="bg-surface-alt/30 border border-border/80 rounded-2xl p-3 space-y-2">
+                      <div className="flex justify-between items-center text-xs font-medium text-secondary">
+                        <span>{language === 'ar' ? 'المبلغ المستلم' : 'Amount Received'}:</span>
+                        <span className="font-mono">{language === 'ar' ? 'د.ك' : 'KWD'}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max={selectedCustomer.balance || 0}
+                          step="0.001"
+                          value={amountReceived}
+                          onChange={(e) => setAmountReceived(e.target.value)}
+                          className="flex-1 text-sm rounded-xl border border-border bg-surface px-3 py-2 text-right font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                          placeholder="0.000"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              e.target.blur();
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const activeEl = document.activeElement;
+                            if (activeEl && activeEl.tagName === 'INPUT') {
+                              activeEl.blur();
+                            }
+                          }}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 shrink-0"
+                        >
+                          {language === 'ar' ? 'إدخال' : 'Enter'}
+                        </button>
+                      </div>
+                      {(() => {
+                        const maxBal = Number(selectedCustomer.balance || 0);
+                        const received = Number(amountReceived) || 0;
+                        const remaining = Math.max(0, maxBal - received);
+                        return (
+                          <div className="space-y-1.5 pt-2 border-t border-border/40">
+                            <div className="flex justify-between items-center text-xs font-bold text-emerald-500">
+                              <span>{language === 'ar' ? 'المبلغ المدفوع' : 'Paid Amount'}:</span>
+                              <span className="font-mono">{formatCurrency(received)}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs font-bold text-rose-500">
+                              <span>{language === 'ar' ? 'المتبقي في الحساب' : 'Balance Remaining'}:</span>
+                              <span className="font-mono">{formatCurrency(remaining)}</span>
+                            </div>
+                            <div className="text-[11px] font-semibold text-center text-blue-400 pt-1 border-t border-border/20">
+                              {language === 'ar' 
+                                ? 'الآن اختر طريقة دفع المبلغ الجزئي' 
+                                : 'Now you select the partial amount pay option'}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { method: t('counter.makeInvoice.paymentCash') || 'CASH', icon: '💵', bg: 'linear-gradient(135deg,#059669,#10b981)', shadow: 'rgba(16,185,129,0.4)', payMethod: 'Cash' },
+                      { method: t('counter.makeInvoice.paymentBukey') || 'BUKEY', icon: '🎟️', bg: 'linear-gradient(135deg,#3b82f6,#4f46e5)', shadow: 'rgba(59,130,246,0.4)', payMethod: 'Bukey' },
+                      { method: t('counter.makeInvoice.paymentKnet') || 'K-NET', icon: '💳', bg: 'linear-gradient(135deg,#f59e0b,#d97706)', shadow: 'rgba(245,158,11,0.4)', payMethod: 'K-Net' },
+                      { method: t('counter.makeInvoice.paymentCredit') || 'CREDIT', icon: '💰', bg: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', shadow: 'rgba(139,92,246,0.4)', payMethod: 'Credit' },
+                    ].map(({ method, icon, bg, shadow, payMethod }) => (
                       <button
                         key={payMethod}
                         type="button"
-                        onClick={() => setSelectedMethod(payMethod)}
-                        className={`relative flex flex-col items-center justify-center p-4 rounded-2xl text-white transition-all hover:-translate-y-1 active:scale-95 group overflow-hidden border-2 ${
-                          isActive ? 'border-white scale-102 ring-4 ring-blue-500/30' : 'border-transparent opacity-85 hover:opacity-100'
-                        }`}
+                        onClick={() => handleSettleAndPay(payMethod)}
+                        className="relative flex flex-col items-center justify-center p-4 rounded-2xl text-white transition-all hover:-translate-y-1 active:scale-95 group overflow-hidden"
                         style={{ background: bg, boxShadow: `0 8px 20px -5px ${shadow}` }}
                       >
                         <span className="text-2xl mb-1 group-hover:scale-110 transition-transform">{icon}</span>
-                        <span className="text-[10px] font-extrabold uppercase tracking-widest">{method}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest">{method}</span>
                       </button>
-                    );
-                  })}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            </div>
-
-            <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row gap-3 sm:gap-4">
-              <button
-                type="button"
-                onClick={() => setShowMarkPaidModal(false)}
-                className="flex-1 rounded-3xl border border-border bg-surface-alt py-3 font-semibold text-primary transition hover:bg-surface text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmPayment}
-                className="flex-1 rounded-3xl text-white bg-emerald-600 hover:bg-emerald-700 py-3 font-semibold transition shadow-md text-sm"
-              >
-                Confirm Payment
-              </button>
+              )}
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
 
       {/* Record Payment Modal */}

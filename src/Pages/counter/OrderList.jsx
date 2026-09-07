@@ -76,10 +76,26 @@ const OrderList = () => {
               if (activeBranchObj) {
                 const bId = String(activeBranchObj.id || activeBranchObj._id).toLowerCase();
                 const bName = String(activeBranchObj.name || '').toLowerCase();
+                const bNameAr = String(activeBranchObj.nameAr || activeBranchObj.arabicName || '').toLowerCase();
                 if (o.branchId && String(o.branchId).toLowerCase() === bId) return true;
                 if (o.transferredTo && String(o.transferredTo).toLowerCase() === bId) return true;
                 if (o.transferredBranchName && String(o.transferredBranchName).toLowerCase() === bName) return true;
                 if (Array.isArray(o.sharedBranches) && o.sharedBranches.some(b => String(b).toLowerCase() === bId)) return true;
+
+                // Section Branch item checking
+                const isCarpetBranch = bName.includes('carpet') || bName.includes('rug') || bNameAr.includes('سجاد');
+                const isShoeBranch = bName.includes('shoe') || bName.includes('footwear') || bNameAr.includes('أحذية') || bNameAr.includes('حذاء') || bNameAr.includes('جوتي');
+                const isWorkshopBranch = bName.includes('workshop') || bNameAr.includes('ورشة');
+
+                if (isCarpetBranch && Array.isArray(o.itemDetails)) {
+                  if (o.itemDetails.some(it => /carpet|سجاد|rug/i.test(it.name || '') || /carpet|سجاد|rug/i.test(it.nameAr || ''))) return true;
+                }
+                if (isShoeBranch && Array.isArray(o.itemDetails)) {
+                  if (o.itemDetails.some(it => /shoe|sneaker|boot|footwear|أحذية|حذاء|جوتي|شوز/i.test(it.name || '') || /أحذية|حذاء|جوتي|شوز|shoe/i.test(it.nameAr || ''))) return true;
+                }
+                if (isWorkshopBranch && (o.status === 'Preparing in workshop' || o.status === 'In Workshop' || (Array.isArray(o.itemDetails) && o.itemDetails.some(it => /carpet|curtain|blanket|heavy|سجاد|ستائر|بطانية|لحاف/i.test(it.name || ''))))) {
+                  return true;
+                }
               }
               return false;
             })();

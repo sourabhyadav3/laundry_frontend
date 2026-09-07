@@ -54,10 +54,26 @@ const Invoices = () => {
           if (activeBranchObj) {
             const bId = String(activeBranchObj.id || activeBranchObj._id).toLowerCase();
             const bName = String(activeBranchObj.name || '').toLowerCase();
+            const bNameAr = String(activeBranchObj.nameAr || activeBranchObj.arabicName || '').toLowerCase();
             if (order.branchId && String(order.branchId).toLowerCase() === bId) return true;
             if (order.transferredTo && String(order.transferredTo).toLowerCase() === bId) return true;
             if (order.transferredBranchName && String(order.transferredBranchName).toLowerCase() === bName) return true;
             if (Array.isArray(order.sharedBranches) && order.sharedBranches.some(b => String(b).toLowerCase() === bId)) return true;
+
+            // Section Branch item checking
+            const isCarpetBranch = bName.includes('carpet') || bName.includes('rug') || bNameAr.includes('سجاد');
+            const isShoeBranch = bName.includes('shoe') || bName.includes('footwear') || bNameAr.includes('أحذية') || bNameAr.includes('حذاء') || bNameAr.includes('جوتي');
+            const isWorkshopBranch = bName.includes('workshop') || bNameAr.includes('ورشة');
+
+            if (isCarpetBranch && Array.isArray(order.itemDetails)) {
+              if (order.itemDetails.some(it => /carpet|سجاد|rug/i.test(it.name || '') || /carpet|سجاد|rug/i.test(it.nameAr || ''))) return true;
+            }
+            if (isShoeBranch && Array.isArray(order.itemDetails)) {
+              if (order.itemDetails.some(it => /shoe|sneaker|boot|footwear|أحذية|حذاء|جوتي|شوز/i.test(it.name || '') || /أحذية|حذاء|جوتي|شوز|shoe/i.test(it.nameAr || ''))) return true;
+            }
+            if (isWorkshopBranch && (order.status === 'Preparing in workshop' || order.status === 'In Workshop' || (Array.isArray(order.itemDetails) && order.itemDetails.some(it => /carpet|curtain|blanket|heavy|سجاد|ستائر|بطانية|لحاف/i.test(it.name || ''))))) {
+              return true;
+            }
           }
           return false;
         })();
