@@ -2315,6 +2315,9 @@ const getBranchDirectory = () => {
   } catch (e) {
     console.error(e);
   }
+  if (typeof window !== 'undefined' && window.__cachedBranches && Array.isArray(window.__cachedBranches) && window.__cachedBranches.length) {
+    return window.__cachedBranches;
+  }
   return DEFAULT_BRANCHES;
 };
 
@@ -2383,15 +2386,21 @@ const sameBranch = (a, b, prefix) => {
   return getBranchCode(a) === getBranchCode(b);
 };
 
-export const getNextBranchOrderNo = (orders, branchId, prefix = 'ORD') => {
+export const getNextBranchOrderNo = (orders = [], branchId, prefix = 'ORD') => {
+  const branchPrefix = prefix === 'INV' ? getBranchPrefix3(branchId) : getBranchCode(branchId);
+  const regex = prefix === 'INV' 
+    ? new RegExp(`^${branchPrefix}-(\\d+)$`) 
+    : new RegExp(`^${branchPrefix}-${prefix}-(\\d+)$`);
+
   const branchKey = branchId;
-  const branchOrders = orders.filter((o) =>
+  const branchOrders = (orders || []).filter((o) =>
     sameBranch(o.branchId || o.branch, branchKey, prefix)
   );
 
-  let maxSeq = prefix === 'INV' ? 0 : 100;
+  let maxSeq = 0;
   branchOrders.forEach((o) => {
-    const match = o.number?.match(/(\d+)$/);
+    if (!o || !o.number) return;
+    const match = o.number.match(regex);
     if (match) {
       const num = parseInt(match[1], 10);
       if (num > maxSeq) {
@@ -2404,11 +2413,10 @@ export const getNextBranchOrderNo = (orders, branchId, prefix = 'ORD') => {
   const seq = prefix === 'INV' ? String(nextSeq).padStart(3, '0') : String(nextSeq).padStart(5, '0');
 
   if (prefix === 'INV') {
-    return `${getBranchPrefix3(branchId)}-${seq}`;
+    return `${branchPrefix}-${seq}`;
   }
 
-  const code = getBranchCode(branchId);
-  return `${code}-${prefix}-${seq}`;
+  return `${branchPrefix}-${prefix}-${seq}`;
 };
 
 /**

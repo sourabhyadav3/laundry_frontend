@@ -370,7 +370,14 @@ const Reports = () => {
       if(end) eStr = end.toISOString().slice(0, 10);
       
       const res = await api.get('/reports/generate', {
-         params: { reportType: stepReportType, category: stepCategory, parameter: stepParameter, start: sStr, end: eStr }
+         params: { 
+           reportType: stepReportType, 
+           category: stepCategory, 
+           parameter: stepParameter, 
+           start: sStr, 
+           end: eStr,
+           branchId: selectedBranch 
+         }
       });
       
       let processedData = res.data.data;
@@ -461,7 +468,9 @@ const Reports = () => {
         if(start) sStr = start.toISOString().slice(0, 10);
         if(end) eStr = end.toISOString().slice(0, 10);
         
-        const res = await api.get('/reports/dashboard', { params: { start: sStr, end: eStr } });
+        const res = await api.get('/reports/dashboard', { 
+          params: { start: sStr, end: eStr, branchId: selectedBranch } 
+        });
         setDashboardData(res.data);
       } catch (e) {
         console.error(e);
@@ -470,7 +479,12 @@ const Reports = () => {
       }
     };
     fetchDashboard();
-  }, [datePreset, customStart, customEnd]);
+  }, [datePreset, customStart, customEnd, selectedBranch]);
+
+  // Clear custom report if branch changes
+  React.useEffect(() => {
+    setCustomReport(null);
+  }, [selectedBranch]);
 
   const summaryLines = [
     `Period: ${DATE_PRESETS.find((p) => p.id === datePreset)?.label || datePreset}`,

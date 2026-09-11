@@ -654,7 +654,7 @@ const MakeInvoice = () => {
 
     const customerObj = customers.find((c) => String(c.id) === String(form.customerId));
     const orderId = Date.now();
-    const branchId = (selectedBranch && selectedBranch !== 'All') ? selectedBranch : (storedUser.assignedBranch || null);
+    const branchId = (selectedBranch && selectedBranch !== 'All') ? selectedBranch : (storedUser.assignedBranch || storedUser.branchId || storedUser.branch || null);
     const orderNo = getNextBranchOrderNo(orders, branchId, 'INV');
 
     const remaining = totalAmount - received;
@@ -755,7 +755,7 @@ const MakeInvoice = () => {
   const handlePrintDirectUnpaid = () => {
     const customerObj = customers.find((c) => String(c.id) === String(form.customerId));
     const orderId = Date.now();
-    const branchId = (selectedBranch && selectedBranch !== 'All') ? selectedBranch : (storedUser.assignedBranch || null);
+    const branchId = (selectedBranch && selectedBranch !== 'All') ? selectedBranch : (storedUser.assignedBranch || storedUser.branchId || storedUser.branch || null);
     const orderNo = getNextBranchOrderNo(orders, branchId, 'INV');
 
     const primaryServiceType = (orderItems.length > 0 && orderItems[0].service) ? orderItems[0].service : quickServiceMode;
@@ -827,7 +827,7 @@ const MakeInvoice = () => {
   const handleSettleAndPayDirectUnpaidWithoutPrint = () => {
     const customerObj = customers.find((c) => String(c.id) === String(form.customerId));
     const orderId = Date.now();
-    const branchId = (selectedBranch && selectedBranch !== 'All') ? selectedBranch : (storedUser.assignedBranch || null);
+    const branchId = (selectedBranch && selectedBranch !== 'All') ? selectedBranch : (storedUser.assignedBranch || storedUser.branchId || storedUser.branch || null);
     const orderNo = getNextBranchOrderNo(orders, branchId, 'INV');
 
     const primaryServiceType = (orderItems.length > 0 && orderItems[0].service) ? orderItems[0].service : quickServiceMode;
@@ -925,7 +925,7 @@ const MakeInvoice = () => {
 
     const customerObj = customers.find((c) => String(c.id) === String(form.customerId));
     const orderId = Date.now();
-    const branchId = (selectedBranch && selectedBranch !== 'All') ? selectedBranch : (storedUser.assignedBranch || null);
+    const branchId = (selectedBranch && selectedBranch !== 'All') ? selectedBranch : (storedUser.assignedBranch || storedUser.branchId || storedUser.branch || null);
     const orderNo = getNextBranchOrderNo(orders, branchId, 'INV');
 
     const primaryServiceType = (orderItems.length > 0 && orderItems[0].service) ? orderItems[0].service : quickServiceMode;
