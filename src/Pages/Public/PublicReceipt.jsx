@@ -280,24 +280,11 @@ const PublicReceipt = () => {
           </div>
         </div>
 
-        {/* Invoice Number Badge & Live Status */}
+        {/* Invoice Number Badge */}
         <div className="p-4 border-b border-dashed border-gray-300 space-y-2.5">
-          <div className="flex justify-between items-center bg-gray-100 p-2.5 rounded-lg border border-gray-300">
-            <div>
-              <span className="text-xs text-gray-500 font-bold block">Invoice Number / رقم الفاتورة</span>
-              <span className="text-base font-black text-black">{order.number || 'N/A'}</span>
-            </div>
-            <div className="text-right">
-              <span className="text-xs text-gray-500 font-bold block">Status / الحالة</span>
-              <span className={`inline-block px-2 py-0.5 rounded text-xs font-black ${
-                order.status === 'Delivered' ? 'bg-green-100 text-green-800 border border-green-300' :
-                order.status === 'Ready' ? 'bg-blue-100 text-blue-800 border border-blue-300' :
-                order.status === 'In Process' ? 'bg-purple-100 text-purple-800 border border-purple-300' :
-                'bg-amber-100 text-amber-900 border border-amber-300'
-              }`}>
-                {order.status || 'Waiting'}
-              </span>
-            </div>
+          <div className="bg-gray-100 p-2.5 rounded-lg border border-gray-300">
+            <span className="text-xs text-gray-500 font-bold block">Invoice Number / رقم الفاتورة</span>
+            <span className="text-base font-black text-black">{order.number || 'N/A'}</span>
           </div>
 
           <div className="flex justify-between text-xs font-bold text-gray-700">
@@ -376,8 +363,7 @@ const PublicReceipt = () => {
           <div className="flex justify-between text-xs font-bold text-gray-700">
             <span>Exp. Delivery / التسليم المتوقع:</span>
             <span className="text-black font-semibold text-right">
-              {expectedDeliveryInfo.date ? `${expectedDeliveryInfo.date} ` : ''}
-              <span>({expectedDeliveryInfo.timeEn === expectedDeliveryInfo.timeAr ? expectedDeliveryInfo.timeEn : `${expectedDeliveryInfo.timeEn} / ${expectedDeliveryInfo.timeAr}`})</span>
+              {expectedDeliveryInfo.formattedDateTime || `${expectedDeliveryInfo.date} ${expectedDeliveryInfo.timeEn}`.trim()}
             </span>
           </div>
         </div>

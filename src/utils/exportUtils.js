@@ -103,7 +103,7 @@ export const formatDateTime = (value) => {
   });
 };
 
-export const formatInvoiceDateTime = (order) => {
+export const formatOrderDateTime = (dateInput) => {
   let timezone = undefined;
   let dateFormat = 'DD/MM/YYYY';
   try {
@@ -119,6 +119,58 @@ export const formatInvoiceDateTime = (order) => {
     }
   } catch {}
 
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (!d || isNaN(d.getTime())) {
+    return { dateFormatted: '', timeFormatted: '', fullFormatted: '' };
+  }
+
+  try {
+    const dateOptions = {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    };
+    const formatter = new Intl.DateTimeFormat('en-US', dateOptions);
+    const parts = formatter.formatToParts(d);
+    const partMap = {};
+    parts.forEach(p => {
+      if (p.type !== 'literal') partMap[p.type] = p.value;
+    });
+
+    const day = partMap.day;
+    const month = partMap.month;
+    const year = partMap.year;
+
+    const dateFormatted = dateFormat === 'YYYY-MM-DD'
+      ? `${year}-${month}-${day}`
+      : `${day}/${month}/${year}`;
+
+    const timeOptions = {
+      timeZone: timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    };
+    const timeFormatted = d.toLocaleTimeString('en-US', timeOptions);
+
+    return {
+      dateFormatted,
+      timeFormatted,
+      fullFormatted: `${dateFormatted} ${timeFormatted}`
+    };
+  } catch (e) {
+    const dateFormatted = d.toLocaleDateString('en-US', { timeZone: timezone });
+    const timeFormatted = d.toLocaleTimeString('en-US', { timeZone: timezone });
+    return {
+      dateFormatted,
+      timeFormatted,
+      fullFormatted: `${dateFormatted} ${timeFormatted}`
+    };
+  }
+};
+
+export const getOrderBaseDateTime = (order) => {
   let dateObj = null;
   if (order?.createdAt) {
     const d = new Date(order.createdAt);
@@ -139,41 +191,13 @@ export const formatInvoiceDateTime = (order) => {
   if (!dateObj) {
     dateObj = new Date();
   }
+  return dateObj;
+};
 
-  try {
-    const dateOptions = {
-      timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    };
-    const formatter = new Intl.DateTimeFormat('en-US', dateOptions);
-    const parts = formatter.formatToParts(dateObj);
-    const partMap = {};
-    parts.forEach(p => {
-      if (p.type !== 'literal') partMap[p.type] = p.value;
-    });
-
-    const day = partMap.day;
-    const month = partMap.month;
-    const year = partMap.year;
-
-    const dateFormatted = dateFormat === 'YYYY-MM-DD'
-      ? `${year}-${month}-${day}`
-      : `${day}/${month}/${year}`;
-
-    const timeOptions = {
-      timeZone: timezone,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    };
-    const timeFormatted = dateObj.toLocaleTimeString('en-US', timeOptions);
-
-    return `${dateFormatted} ${timeFormatted}`;
-  } catch (e) {
-    return dateObj.toLocaleString('en-US', { timeZone: timezone });
-  }
+export const formatInvoiceDateTime = (order) => {
+  const dateObj = getOrderBaseDateTime(order);
+  const { fullFormatted } = formatOrderDateTime(dateObj);
+  return fullFormatted || dateObj.toLocaleString('en-US');
 };
 
 const downloadBlob = (blob, filename) => {
@@ -579,15 +603,19 @@ const getDeliveryTypeLabel = (order) => {
 export const translateDeliveryStatus = (status) => {
   const s = String(status || 'Waiting').trim().toLowerCase();
   if (s === 'waiting' || s === 'received') return { en: 'Waiting', ar: 'قيد الانتظار' };
-  if (s === 'preparing in shop' || s === 'in shop' || s === 'washing') return { en: 'Preparing in shop', ar: 'قيد التحضير في المحل' };
-  if (s === 'preparing in workshop' || s === 'in workshop' || s === 'drying' || s === 'ironing') return { en: 'Preparing in workshop', ar: 'قيد التحضير في الورشة' };
-  if (s === 'hold' || s === 'on hold') return { en: 'Hold', ar: 'معلق' };
+  if (s === 'preparing in shop' || s === 'in shop') return { en: 'Preparing in shop', ar: 'قيد التحضير في المحل' };
+  if (s === 'preparing in workshop' || s === 'in workshop' || s === 'drying') return { en: 'Preparing in workshop', ar: 'قيد التحضير في الورشة' };
+  if (s === 'ironing' || s === 'iron') return { en: 'Ironing', ar: 'كي' };
+  if (s === 'washing' || s === 'wash') return { en: 'Washing', ar: 'غسيل' };
   if (s === 'ready') return { en: 'Ready', ar: 'جاهز' };
   if (s === 'ready for delivery' || s === 'h services') return { en: 'Ready for delivery', ar: 'جاهز للتوصيل' };
   if (s === 'ready for shop') return { en: 'Ready for shop', ar: 'جاهز للمحل' };
   if (s === 'with driver' || s === 'assigned' || s === 'out for delivery') return { en: 'With Driver', ar: 'مع السائق' };
   if (s === 'delivered') return { en: 'Delivered', ar: 'تم التسليم' };
+  if (s === 'hold' || s === 'on hold') return { en: 'Hold', ar: 'معلق' };
   if (s === 'return' || s === 'cancel' || s === 'cancelled') return { en: 'Return', ar: 'مرتجع' };
+  if (s === 'store 1' || s === 'store1') return { en: 'Store 1', ar: 'مخزن 1' };
+  if (s === 'store 2' || s === 'store2') return { en: 'Store 2', ar: 'مخزن 2' };
   if (s === 'store' || s === 'in store') return { en: 'Store', ar: 'في المخزن' };
   if (s === 'failed') return { en: 'Failed', ar: 'فشل' };
   return { en: status, ar: status };
@@ -773,76 +801,79 @@ export const getExpectedDeliveryInfo = (order) => {
     }
   } catch (e) {}
 
+  const baseDate = getOrderBaseDateTime(order);
   const rawTime = String(order?.expectedDeliveryTime || order?.deliveryTime || '').trim();
   let estimatedTime = rawTime || matchedService?.estimatedTime || (isExpress ? '2 hours' : '24 hours');
 
-  let estTimeEn = estimatedTime;
-  let estTimeAr = estimatedTime;
-  
   const clockMatch = estimatedTime.match(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/);
   const ampmMatch = estimatedTime.match(/^([0-1]?[0-9]):([0-5][0-9])\s*(AM|PM|am|pm)$/i);
   const dayMatch = estimatedTime.toLowerCase().includes('day') || estimatedTime.includes('يوم') || estimatedTime.includes('أيام');
   const pureNumMatch = estimatedTime.match(/^\s*(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hours?|ساعة|ساعات)?\s*$/i);
   const hourMatch = estimatedTime.toLowerCase().includes('hour') || estimatedTime.includes('ساعة') || estimatedTime.includes('ساعات');
 
-  if (clockMatch) {
-    let hours = parseInt(clockMatch[1], 10);
-    const minutes = clockMatch[2];
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const periodAr = hours >= 12 ? 'م' : 'ص';
-    const hours12 = hours % 12 || 12;
-    const formattedHours = String(hours12).padStart(2, '0');
-    estTimeEn = `${formattedHours}:${minutes} ${period}`;
-    estTimeAr = `${formattedHours}:${minutes} ${periodAr}`;
-  } else if (ampmMatch) {
-    const hours = ampmMatch[1].padStart(2, '0');
-    const minutes = ampmMatch[2];
-    const period = ampmMatch[3].toUpperCase();
-    const periodAr = period === 'PM' ? 'م' : 'ص';
-    estTimeEn = `${hours}:${minutes} ${period}`;
-    estTimeAr = `${hours}:${minutes} ${periodAr}`;
-  } else if (dayMatch) {
-    const num = estimatedTime.replace(/[^0-9.]/g, '');
-    const numVal = parseFloat(num);
-    const isSingle = numVal === 1;
-    estTimeEn = numVal ? (isSingle ? 'After 1 Day' : `After ${numVal} Days`) : (estimatedTime.toLowerCase().startsWith('after') ? estimatedTime : `After ${estimatedTime}`);
-    estTimeAr = numVal ? (isSingle ? 'بعد 1 يوم' : `بعد ${numVal} أيام`) : (estimatedTime.startsWith('بعد') ? estimatedTime : `بعد ${estimatedTime}`);
-  } else if (pureNumMatch || hourMatch) {
-    const num = estimatedTime.replace(/[^0-9.]/g, '');
-    const numVal = parseFloat(num);
-    const isSingle = numVal === 1;
-    estTimeEn = numVal ? (isSingle ? 'After 1 Hour' : `After ${numVal} Hours`) : (estimatedTime.toLowerCase().startsWith('after') ? estimatedTime : `After ${estimatedTime}`);
-    estTimeAr = numVal ? (isSingle ? 'بعد 1 ساعة' : `بعد ${numVal} ساعات`) : (estimatedTime.startsWith('بعد') ? estimatedTime : `بعد ${estimatedTime}`);
+  let targetDeliveryDate = new Date(baseDate.getTime());
+  const explicitDateStr = order?.expectedDeliveryDate || order?.deliveryDate;
+
+  if (clockMatch || ampmMatch) {
+    let targetHours = 0;
+    let targetMinutes = 0;
+    if (clockMatch) {
+      targetHours = parseInt(clockMatch[1], 10);
+      targetMinutes = parseInt(clockMatch[2], 10);
+    } else if (ampmMatch) {
+      targetHours = parseInt(ampmMatch[1], 10) % 12;
+      if (ampmMatch[3].toUpperCase() === 'PM') targetHours += 12;
+      targetMinutes = parseInt(ampmMatch[2], 10);
+    }
+
+    if (explicitDateStr) {
+      const parsedExplicit = new Date(explicitDateStr);
+      if (!isNaN(parsedExplicit.getTime())) {
+        targetDeliveryDate = new Date(parsedExplicit.getFullYear(), parsedExplicit.getMonth(), parsedExplicit.getDate(), targetHours, targetMinutes, 0);
+      } else {
+        targetDeliveryDate.setHours(targetHours, targetMinutes, 0, 0);
+      }
+    } else {
+      targetDeliveryDate.setHours(targetHours, targetMinutes, 0, 0);
+      if (targetDeliveryDate.getTime() <= baseDate.getTime()) {
+        targetDeliveryDate.setDate(targetDeliveryDate.getDate() + 1);
+      }
+    }
   } else {
-    estTimeEn = estimatedTime;
-    estTimeAr = estimatedTime;
-  }
-
-  const isHome = order?.isHomeDelivery === true || String(order?.deliveryType || '').toLowerCase() === 'home delivery';
-
-  let dateStr = isHome ? (order?.deliveryDate || order?.expectedDeliveryDate) : '';
-  if (isHome && !dateStr) {
-    const baseDate = order?.date ? new Date(order.date) : new Date();
-    let hoursToAdd = 24;
-    if (pureNumMatch || hourMatch || estimatedTime.toLowerCase().includes('hour')) {
+    let hoursToAdd = isExpress ? 2 : 24;
+    if (dayMatch) {
+      const num = parseFloat(estimatedTime.replace(/[^0-9.]/g, '')) || 1;
+      hoursToAdd = num * 24;
+    } else if (pureNumMatch || hourMatch || estimatedTime.toLowerCase().includes('hour') || estimatedTime.includes('ساعة')) {
       const parsedHours = parseFloat(estimatedTime.replace(/[^0-9.]/g, ''));
       if (!isNaN(parsedHours) && parsedHours > 0) hoursToAdd = parsedHours;
-    } else if (dayMatch || estimatedTime.toLowerCase().includes('day')) {
-      const parsedDays = parseFloat(estimatedTime.replace(/[^0-9.]/g, ''));
-      if (!isNaN(parsedDays) && parsedDays > 0) hoursToAdd = parsedDays * 24;
-    } else {
-      hoursToAdd = isExpress ? 2 : 24;
     }
-    const computedDate = new Date(baseDate.getTime() + hoursToAdd * 60 * 60 * 1000);
-    dateStr = computedDate.toISOString().split('T')[0];
+
+    if (explicitDateStr) {
+      const parsedExplicit = new Date(explicitDateStr);
+      if (!isNaN(parsedExplicit.getTime())) {
+        const offsetDate = new Date(baseDate.getTime() + hoursToAdd * 60 * 60 * 1000);
+        targetDeliveryDate = new Date(parsedExplicit.getFullYear(), parsedExplicit.getMonth(), parsedExplicit.getDate(), offsetDate.getHours(), offsetDate.getMinutes(), 0);
+      } else {
+        targetDeliveryDate = new Date(baseDate.getTime() + hoursToAdd * 60 * 60 * 1000);
+      }
+    } else {
+      targetDeliveryDate = new Date(baseDate.getTime() + hoursToAdd * 60 * 60 * 1000);
+    }
   }
+
+  const { dateFormatted, timeFormatted, fullFormatted } = formatOrderDateTime(targetDeliveryDate);
+  const isHome = order?.isHomeDelivery === true || String(order?.deliveryType || '').toLowerCase() === 'home delivery';
 
   return {
     isHomeDelivery: isHome,
-    date: isHome && dateStr ? formatDate(dateStr) : '',
-    timeEn: estTimeEn,
-    timeAr: estTimeAr,
-    rawEstimatedTime: estimatedTime
+    date: dateFormatted,
+    time: timeFormatted,
+    timeEn: timeFormatted,
+    timeAr: timeFormatted,
+    formattedDateTime: fullFormatted,
+    rawEstimatedTime: estimatedTime,
+    deliveryDateObj: targetDeliveryDate
   };
 };
 
@@ -1255,14 +1286,14 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
               <span class="info-label">Delivery Type / نوع التوصيل:</span>
               <span class="info-value">${translatedDeliveryType.en} / <span style="direction: rtl;">${translatedDeliveryType.ar}</span></span>
             </div>
-            <div class="info-row" style="display: flex; justify-content: space-between; align-items: flex-start;">
-              <span class="info-label" style="white-space: nowrap; font-weight: 800;">Exp. Delivery / التسليم المتوقع:</span>
-              <span class="info-value" style="text-align: right;">
-                ${expectedDeliveryInfo.date ? `${expectedDeliveryInfo.date}<br/>` : ''}
-                <span style="font-size: 9.5px; font-weight: 700; color: #111;">
-                  ${expectedDeliveryInfo.timeEn === expectedDeliveryInfo.timeAr ? expectedDeliveryInfo.timeEn : `${expectedDeliveryInfo.timeEn} / <span style="direction: rtl;">${expectedDeliveryInfo.timeAr}</span>`}
-                </span>
-              </span>
+            ${(order?.packaging === 'Folded' || order?.packaging === 'Fold') ? `
+            <div class="info-row" style="background-color: #f3e8ff; border: 1.5px dashed #7e22ce; padding: 2px 4px; border-radius: 4px; margin: 3px 0; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+              <span class="info-label" style="color: #6b21a8 !important; font-weight: 800;">Packaging / التجهيز:</span>
+              <span class="info-value" style="color: #6b21a8 !important; font-weight: 900;">FOLDED / طي 📦</span>
+            </div>` : ''}
+            <div class="info-row">
+              <span class="info-label">Exp. Delivery / التسليم المتوقع:</span>
+              <span class="info-value" style="font-weight: 800;">${expectedDeliveryInfo.formattedDateTime || `${expectedDeliveryInfo.date} ${expectedDeliveryInfo.timeEn}`.trim()}</span>
             </div>
           </div>
           

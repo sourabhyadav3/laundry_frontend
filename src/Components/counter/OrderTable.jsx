@@ -1,8 +1,8 @@
 import React, { useContext } from 'react';
 import { FiEye, FiRefreshCw } from 'react-icons/fi';
 import ReusableTable from '../ReusableTable';
-import { formatCurrency, formatDate } from '../../utils/exportUtils';
-import { getOrderStatusStyle, paymentStatusStyles } from '../../constants/statusStyles';
+import { formatDate } from '../../utils/exportUtils';
+import { getOrderStatusStyle } from '../../constants/statusStyles';
 import { AdminStateContext } from '../../context/AdminStateContext';
 
 const OrderTable = ({ orders, onView, onUpdateStatus, selectedOrderIds, setSelectedOrderIds }) => {
@@ -139,18 +139,21 @@ const OrderTable = ({ orders, onView, onUpdateStatus, selectedOrderIds, setSelec
       }
     },
     {
-      header: 'Amount',
-      accessor: 'totalAmount',
-      format: (val) => formatCurrency(val),
-    },
-    {
-      header: 'Payment Status',
-      accessor: 'paymentStatus',
-      cell: (row) => (
-        <span className={paymentStatusStyles[row.paymentStatus] || paymentStatusStyles.Pending}>
-          {row.paymentStatus}
-        </span>
-      ),
+      header: 'Fold',
+      accessor: 'packaging',
+      cell: (row) => {
+        const isFolded = row.packaging === 'Folded' || row.packaging === 'Fold' || String(row.packaging || '').toLowerCase().includes('fold') || (Array.isArray(row.itemDetails) && row.itemDetails.some(it => String(it.service || '').toLowerCase().includes('fold') || String(it.notes || '').toLowerCase().includes('fold')));
+        return isFolded ? (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 whitespace-nowrap">
+            <span>📦</span>
+            <span>Fold</span>
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold text-secondary/70 bg-slate-500/10 border border-border/50 whitespace-nowrap">
+            <span>—</span>
+          </span>
+        );
+      }
     },
     {
       header: 'Order Status',

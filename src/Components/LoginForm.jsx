@@ -86,11 +86,8 @@ const LoginForm = () => {
     setPassword(acc.pass);
     setErrors({});
 
-    if (acc.email === 'patricia@tuhama.com') {
-      const match = branchesList.find(b => b.name === 'Andalus');
-      if (match) setSelectedBranchId(match.id || match._id);
-    } else if (acc.email === 'kevin@tuhama.com' || acc.email === 'robert@tuhama.com') {
-      const match = branchesList.find(b => b.name === 'Mishrif');
+    if (acc.email === 'patricia@tuhama.com' || acc.email === 'kevin@tuhama.com' || acc.email === 'robert@tuhama.com') {
+      const match = branchesList.find(b => b?.name?.toLowerCase() === 'mishrif');
       if (match) setSelectedBranchId(match.id || match._id);
     }
 

@@ -86,9 +86,18 @@ const Orders = () => {
           return false;
         })();
 
-        const matchesSearch =
-          order.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          order.customerName.toLowerCase().includes(searchTerm.toLowerCase());
+        const searchTokens = searchTerm
+          .split(/[,;\s]+/)
+          .map(t => t.trim().toLowerCase())
+          .filter(Boolean);
+
+        const orderNo = String(order.number || '').toLowerCase();
+        const custName = String(order.customerName || '').toLowerCase();
+        const custPhone = String(order.customerPhone || order.phone || '').toLowerCase();
+
+        const matchesSearch = searchTokens.length === 0 || searchTokens.some(term =>
+          orderNo.includes(term) || custName.includes(term) || custPhone.includes(term)
+        );
 
         const matchesStatus = statusFilter === 'All' || order.status === statusFilter;
         const matchesPayment = paymentFilter === 'All' || order.paymentStatus === paymentFilter;

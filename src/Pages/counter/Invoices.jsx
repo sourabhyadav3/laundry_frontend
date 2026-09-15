@@ -25,6 +25,7 @@ const Invoices = () => {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [newStatus, setNewStatus] = useState('Waiting');
   const [holdComment, setHoldComment] = useState('');
+  const [deliveryPaymentMethod, setDeliveryPaymentMethod] = useState('');
 
   const { t, language } = useLanguage();
 
@@ -152,41 +153,31 @@ const Invoices = () => {
             const selStr = String(selectedBranch).toLowerCase();
             if (o.branchId && String(o.branchId).toLowerCase() === selStr) return true;
             if (o.branch && String(o.branch).toLowerCase() === selStr) return true;
-            if (o.transferredTo && String(o.transferredTo).toLowerCase() === selStr) return true;
-            if (o.transferredBranchName && String(o.transferredBranchName).toLowerCase() === selStr) return true;
-            if (Array.isArray(o.sharedBranches) && o.sharedBranches.some(b => String(b).toLowerCase() === selStr)) return true;
+            if (o.branchName && String(o.branchName).toLowerCase() === selStr) return true;
 
             const activeBranchObj = branches?.find(b => String(b.id || b._id).toLowerCase() === selStr || String(b.name || '').toLowerCase() === selStr);
             if (activeBranchObj) {
               const bId = String(activeBranchObj.id || activeBranchObj._id).toLowerCase();
               const bName = String(activeBranchObj.name || '').toLowerCase();
-              const bNameAr = String(activeBranchObj.nameAr || activeBranchObj.arabicName || '').toLowerCase();
               if (o.branchId && String(o.branchId).toLowerCase() === bId) return true;
-              if (o.transferredTo && String(o.transferredTo).toLowerCase() === bId) return true;
-              if (o.transferredBranchName && String(o.transferredBranchName).toLowerCase() === bName) return true;
-              if (Array.isArray(o.sharedBranches) && o.sharedBranches.some(b => String(b).toLowerCase() === bId)) return true;
-
-              // Section Branch item checking
-              const isCarpetBranch = bName.includes('carpet') || bName.includes('rug') || bNameAr.includes('سجاد');
-              const isShoeBranch = bName.includes('shoe') || bName.includes('footwear') || bNameAr.includes('أحذية') || bNameAr.includes('حذاء') || bNameAr.includes('جوتي');
-              const isWorkshopBranch = bName.includes('workshop') || bNameAr.includes('ورشة');
-
-              if (isCarpetBranch && Array.isArray(o.itemDetails)) {
-                if (o.itemDetails.some(it => /carpet|سجاد|rug/i.test(it.name || '') || /carpet|سجاد|rug/i.test(it.nameAr || ''))) return true;
-              }
-              if (isShoeBranch && Array.isArray(o.itemDetails)) {
-                if (o.itemDetails.some(it => /shoe|sneaker|boot|footwear|أحذية|حذاء|جوتي|شوز/i.test(it.name || '') || /أحذية|حذاء|جوتي|شوز|shoe/i.test(it.nameAr || ''))) return true;
-              }
-              if (isWorkshopBranch && (o.status === 'Preparing in workshop' || o.status === 'In Workshop' || (Array.isArray(o.itemDetails) && o.itemDetails.some(it => /carpet|curtain|blanket|heavy|سجاد|ستائر|بطانية|لحاف/i.test(it.name || ''))))) {
-                return true;
-              }
+              if (o.branch && String(o.branch).toLowerCase() === bName) return true;
+              if (o.branchName && String(o.branchName).toLowerCase() === bName) return true;
             }
             return false;
           })();
 
-          const matchesSearch =
-            o.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            o.customerName.toLowerCase().includes(searchTerm.toLowerCase());
+          const searchTokens = searchTerm
+            .split(/[,;\s]+/)
+            .map(t => t.trim().toLowerCase())
+            .filter(Boolean);
+
+          const orderNo = String(o.number || '').toLowerCase();
+          const custName = String(o.customerName || '').toLowerCase();
+          const custPhone = String(o.customerPhone || o.phone || '').toLowerCase();
+
+          const matchesSearch = searchTokens.length === 0 || searchTokens.some(term =>
+            orderNo.includes(term) || custName.includes(term) || custPhone.includes(term)
+          );
 
           return matchesBranch && matchesSearch;
         })
@@ -206,6 +197,7 @@ const Invoices = () => {
     setSelectedOrder(order);
     setNewStatus(order.status);
     setHoldComment(order.holdComment || '');
+    setDeliveryPaymentMethod(order.paymentMethod || '');
     setShowStatusModal(true);
   };
 
@@ -217,7 +209,11 @@ const Invoices = () => {
     updateOrderStatus(
       selectedOrder.id,
       newStatus,
-      newStatus === HOLD_STATUS ? holdComment.trim() : undefined
+      newStatus === HOLD_STATUS ? holdComment.trim() : undefined,
+      {
+        paymentMethod: (newStatus === 'Delivered' && deliveryPaymentMethod) ? deliveryPaymentMethod : undefined,
+        paymentStatus: (newStatus === 'Delivered' && deliveryPaymentMethod) ? 'Paid' : undefined
+      }
     );
     toast.success(`Invoice ${selectedOrder.number} updated to ${newStatus}`);
     setShowStatusModal(false);
@@ -443,6 +439,63 @@ const Invoices = () => {
                   placeholder="Reason for hold..."
                   className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-amber-400/40"
                 />
+              </div>
+            )}
+            {/* Payment Selection on Delivery */}
+            {newStatus === 'Delivered' && (selectedOrder.paymentStatus !== 'Paid') && (
+              <div className="p-3.5 bg-surface-alt/70 border border-border/80 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
+                    💳 {language === 'ar' ? 'اختر طريقة الدفع' : 'Select Payment Method'}
+                  </span>
+                  <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/30">
+                    {formatCurrency(selectedOrder.totalAmount || selectedOrder.price || 0)}
+                  </span>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    { method: 'CASH', icon: '💵', bg: 'linear-gradient(135deg,#059669,#10b981)', shadow: 'rgba(16,185,129,0.3)', payMethod: 'Cash' },
+                    { method: 'BUKEY', icon: '🎟️', bg: 'linear-gradient(135deg,#3b82f6,#4f46e5)', shadow: 'rgba(59,130,246,0.3)', payMethod: 'Bukey' },
+                    { method: 'K-NET', icon: '💳', bg: 'linear-gradient(135deg,#f59e0b,#d97706)', shadow: 'rgba(245,158,11,0.3)', payMethod: 'K-Net' },
+                    { method: 'CREDIT', icon: '💰', bg: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', shadow: 'rgba(139,92,246,0.3)', payMethod: 'Credit' },
+                  ].map(({ method, icon, bg, shadow, payMethod }) => {
+                    const isSelected = deliveryPaymentMethod === payMethod;
+                    return (
+                      <button
+                        key={payMethod}
+                        type="button"
+                        onClick={() => setDeliveryPaymentMethod((prev) => (prev === payMethod ? '' : payMethod))}
+                        className={`relative flex flex-col items-center justify-center p-3 rounded-xl text-white transition-all hover:-translate-y-0.5 active:scale-95 group overflow-hidden ${
+                          isSelected ? 'ring-4 ring-blue-500/50 scale-[1.03] font-black' : 'opacity-90 hover:opacity-100'
+                        }`}
+                        style={{ background: bg, boxShadow: isSelected ? `0 8px 20px -3px ${shadow}` : 'none' }}
+                      >
+                        {isSelected && (
+                          <div className="absolute top-1 right-1 bg-white text-slate-900 rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-black shadow-sm">
+                            ✓
+                          </div>
+                        )}
+                        <span className="text-xl mb-0.5 group-hover:scale-110 transition-transform">{icon}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest">{method}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setDeliveryPaymentMethod('')}
+                  className={`w-full relative flex items-center justify-center gap-2 p-2 rounded-xl text-white transition-all hover:-translate-y-0.5 active:scale-95 group overflow-hidden ${
+                    !deliveryPaymentMethod ? 'ring-4 ring-slate-400/50 font-black' : 'opacity-85'
+                  }`}
+                  style={{ background: 'linear-gradient(135deg,#64748b,#475569)', boxShadow: '0 4px 12px -3px rgba(100,116,139,0.3)' }}
+                >
+                  <span className="text-base">📝</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest">
+                    {language === 'ar' ? 'غير مدفوع بالكامل (Pending)' : 'Full Unpaid (Keep Pending)'}
+                  </span>
+                </button>
               </div>
             )}
             <button

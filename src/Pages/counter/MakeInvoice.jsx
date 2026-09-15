@@ -9,6 +9,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
 import { getBilingualGarmentNames } from '../../utils/garmentTranslations';
 import { getGarmentPriceForService } from '../../utils/garmentPricing';
+import { CUSTOMER_AREAS } from '../../constants/areas';
 
 const SERVICE_MODES = [
   { id: 'Normal', label: 'Normal / Wash & Iron', key: 'normalService', color: 'bg-blue-600 hover:bg-blue-700 text-white' },
@@ -36,10 +37,7 @@ const CARD_COLORS_DARK = [
   'bg-cyan-950/40 border-cyan-900/40 text-cyan-200',
 ];
 
-const DEFAULT_AREAS = [
-  'Salmiya', 'Hawally', 'Mishrif', 'Kuwait City', 'Rumaithiya', 'Jabriya',
-  'Fahaheel', 'Farwaniya', 'Mahboula', 'Egaila', 'Ahmadi', 'Jahra', 'Khaitan', 'Bneid Al-Gar'
-];
+const DEFAULT_AREAS = CUSTOMER_AREAS;
 
 const MakeInvoice = () => {
   const { customers, orders, addOrder, setCustomers, updateCustomer, catalog, setCatalog, selectedBranch, payments, setPayments, services, addCustomer } = useContext(AdminStateContext);
@@ -94,6 +92,7 @@ const MakeInvoice = () => {
       discountValue: 0,
       useFreeBalance: false,
       deliveryMode: 'branch',
+      packaging: 'Normal', // 'Normal' (Hanger) | 'Folded' (Fold)
     };
     if (!saved) return defaults;
     const parsed = JSON.parse(saved);
@@ -101,6 +100,7 @@ const MakeInvoice = () => {
       ...defaults,
       ...parsed,
       deliveryMode: 'branch',
+      packaging: parsed.packaging || 'Normal',
     };
   });
 
@@ -457,19 +457,80 @@ const MakeInvoice = () => {
     setShowSearchResults(false);
   };
 
+  const getServiceCategory = (serviceType = '') => {
+    const s = String(serviceType || '').toLowerCase().trim();
+    if (s.includes('dry')) {
+      return 'Dry Cleaning';
+    }
+    const isExpress = s.includes('express') || s.includes('urgent');
+    const isIronOnly = (s.includes('iron') || s.includes('press') || s.includes('rn')) && !s.includes('wash') && !s.includes('fold');
+
+    if (isExpress && isIronOnly) {
+      return 'Express Ironing';
+    }
+    if (isExpress) {
+      return 'Express Wash & Iron';
+    }
+    if (isIronOnly) {
+      return 'Normal Ironing';
+    }
+    return 'Wash & Iron';
+  };
+
+  const getCategoryDisplayName = (category, lang = 'en') => {
+    const map = {
+      'Normal Ironing': {
+        en: 'Normal Ironing',
+        ar: 'كوي عادي'
+      },
+      'Wash & Iron': {
+        en: 'Wash & Iron',
+        ar: 'غسيل وكوي عادي'
+      },
+      'Express Ironing': {
+        en: 'Express Ironing',
+        ar: 'كوي مستعجل'
+      },
+      'Express Wash & Iron': {
+        en: 'Express Wash & Iron',
+        ar: 'غسيل وكوي مستعجل'
+      },
+      'Dry Cleaning': {
+        en: 'Dry Cleaning',
+        ar: 'تنظيف جاف'
+      }
+    };
+    return map[category] ? (lang === 'ar' ? map[category].ar : map[category].en) : category;
+  };
+
   const addGarment = (g, service, modifierNotes = '') => {
     if (orderItems.length > 0) {
-      const hasExpress = orderItems.some(item => item.service.toLowerCase().includes('express'));
-      const isNewItemExpress = service.toLowerCase().includes('express');
-      
-      if (hasExpress && !isNewItemExpress) {
-        setMismatchError(language === 'ar' ? 'لا يمكنك إضافة خدمة عادية مع خدمة مستعجلة في نفس الفاتورة. يرجى إنشاء فاتورة منفصلة.' : 'You cannot add a normal item when there are express items. Please create a separate invoice.');
+      const currentCategory = getServiceCategory(orderItems[0].service);
+      const newCategory = getServiceCategory(service);
+
+      if (currentCategory !== newCategory) {
+        const currentLabel = getCategoryDisplayName(currentCategory, language);
+        const newLabel = getCategoryDisplayName(newCategory, language);
+        const errorMsg = language === 'ar'
+          ? `لا يمكنك دمج (${newLabel}) مع (${currentLabel}) في نفس الفاتورة. يرجى إنشاء فاتورة منفصلة.`
+          : `You cannot mix (${newLabel}) with (${currentLabel}) in the same invoice. Please create a separate invoice.`;
+        setMismatchError(errorMsg);
         return;
       }
-      if (!hasExpress && isNewItemExpress) {
-        setMismatchError(language === 'ar' ? 'لا يمكنك إضافة خدمة مستعجلة مع خدمة عادية في نفس الفاتورة. يرجى إنشاء فاتورة منفصلة.' : 'You cannot add an express item when there are normal items. Please create a separate invoice.');
-        return;
-      }
+    }
+
+    const isCarpet =
+      String(g.name || '').toLowerCase().includes('carpet') ||
+      String(g.nameAr || '').includes('سجاد') ||
+      String(g.key || '').toLowerCase() === 'carpet';
+
+    if (!isCarpet && orderItems.some((item) => item.name === g.name)) {
+      toast.info(
+        language === 'ar'
+          ? 'هذا الصنف مضاف بالفعل إلى الفاتورة. يرجى استخدام أزرار + / - لتعديل الكمية.'
+          : 'Item already added to invoice. Please use + / - buttons to adjust quantity.'
+      );
+      return;
     }
 
     setOrderItems((prev) => [
@@ -676,6 +737,7 @@ const MakeInvoice = () => {
       deliveryStatus: 'Waiting',
       isHomeDelivery: form.deliveryMode === 'home',
       deliveryType: form.deliveryMode === 'home' ? 'Home Delivery' : 'Branch Pickup',
+      packaging: form.packaging || 'Normal',
       paymentStatus: finalPaymentStatus,
       paymentMethod: method,
       amount: subtotal,
@@ -771,6 +833,7 @@ const MakeInvoice = () => {
       deliveryStatus: 'Waiting',
       isHomeDelivery: form.deliveryMode === 'home',
       deliveryType: form.deliveryMode === 'home' ? 'Home Delivery' : 'Branch Pickup',
+      packaging: form.packaging || 'Normal',
       paymentStatus: 'Pending',
       paymentMethod: 'Unpaid',
       amount: subtotal,
@@ -843,6 +906,7 @@ const MakeInvoice = () => {
       deliveryStatus: 'Waiting',
       isHomeDelivery: form.deliveryMode === 'home',
       deliveryType: form.deliveryMode === 'home' ? 'Home Delivery' : 'Branch Pickup',
+      packaging: form.packaging || 'Normal',
       paymentStatus: 'Pending',
       paymentMethod: 'Unpaid',
       amount: subtotal,
@@ -1436,6 +1500,20 @@ const MakeInvoice = () => {
                     onClick={() => {
                       const key = String(g.key || '').toLowerCase();
                       const name = String(g.name || '').toLowerCase();
+                      const isCarpet =
+                        key === 'carpet' ||
+                        name === 'carpet' ||
+                        String(g.nameAr || '').includes('سجاد');
+
+                      if (!isCarpet && orderItems.some((item) => item.name === g.name)) {
+                        toast.info(
+                          language === 'ar'
+                            ? 'هذا الصنف مضاف بالفعل إلى الفاتورة. يرجى استخدام أزرار + / - لتعديل الكمية.'
+                            : 'Item already added to invoice. Please use + / - buttons to adjust quantity.'
+                        );
+                        return;
+                      }
+
                       const needsModifier =
                         key === 'ghotraa' ||
                         name === 'ghotraa' ||
@@ -1444,7 +1522,7 @@ const MakeInvoice = () => {
                         key === 'shmagespecial' ||
                         name === 'shmage (special)';
 
-                      if (key === 'carpet' || name === 'carpet') {
+                      if (isCarpet) {
                         setSelectedGarmentForCarpet(g);
                         setCarpetHeightM('');
                         setCarpetWidthM('');
@@ -1536,6 +1614,39 @@ const MakeInvoice = () => {
                   </button>
                 </div>
               </div>
+
+              {/* Packaging Mode: Only Fold Button */}
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/35">
+                <label className="text-[10px] font-bold text-secondary uppercase tracking-wider">
+                  {language === 'ar' ? 'طريقة التجهيز' : 'Packaging'}
+                </label>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setForm((prev) => ({ ...prev, packaging: prev.packaging === 'Folded' ? 'Normal' : 'Folded' }))}
+                    className={`px-3 py-1 text-[11px] font-semibold rounded-lg border transition-all ${
+                      form.packaging === 'Folded'
+                        ? 'bg-purple-600 border-purple-700 text-white shadow-sm font-bold scale-105'
+                        : 'bg-surface border-border text-secondary hover:text-primary hover:border-slate-400'
+                    }`}
+                  >
+                    📦 {language === 'ar' ? 'طي (Fold)' : 'Fold'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Folded Invoice View Indicator */}
+              {form.packaging === 'Folded' && (
+                <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-purple-500/15 border border-purple-400/40 text-purple-700 dark:text-purple-300 text-[11px] font-bold">
+                  <span className="flex items-center gap-1.5">
+                    <span>📦</span>
+                    <span>{language === 'ar' ? 'فاتورة بطريقة الطي (Folded View)' : 'Folded Invoice (Packaging: Fold)'}</span>
+                  </span>
+                  <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-purple-600 text-white font-extrabold">
+                    FOLDED
+                  </span>
+                </div>
+              )}
 
               {/* Date & Time Edit Controls */}
               <div className="flex flex-col gap-2 pt-2 border-t border-border/35">
@@ -2260,7 +2371,7 @@ const MakeInvoice = () => {
 
       {/* ===== CARPET SIZE MODAL ===== */}
       {selectedGarmentForCarpet && (() => {
-        const ratePerSqm = Number(selectedGarmentForCarpet.price || 0);
+        const ratePerSqm = getGarmentPriceForService(selectedGarmentForCarpet, quickServiceMode);
         const parseDim = (val) => {
           const n = Number(String(val).replace(',', '.'));
           return Number.isFinite(n) && n > 0 ? n : 0;
@@ -2396,14 +2507,8 @@ const MakeInvoice = () => {
                           {/* Required Color Choice */}
                           <div>
                               <label className="block text-xs font-semibold uppercase tracking-wider text-secondary mb-2">Color Choice</label>
-                              <div className="grid grid-cols-2 gap-2">
+                              <div className="grid grid-cols-1 gap-2">
                                   {[
-                                      {
-                                          label: 'Red',
-                                          value: 'Red',
-                                          active: 'border-rose-300 bg-rose-50/60 dark:border-rose-600/40 dark:bg-rose-900/20',
-                                          idle: 'border-border bg-surface-alt hover:border-rose-300 hover:bg-rose-50/40 dark:hover:border-rose-600/30 dark:hover:bg-rose-900/10',
-                                      },
                                       {
                                           label: 'White',
                                           value: 'White',

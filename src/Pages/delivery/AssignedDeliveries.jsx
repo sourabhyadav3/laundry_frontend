@@ -225,8 +225,8 @@ const AssignedDeliveries = () => {
         onClose={() => setShowModal(false)}
         job={selected}
         type="delivery"
-        onUpdateStatus={(id, status) => {
-          updateDeliveryStatus(id, status);
+        onUpdateStatus={(id, status, extra) => {
+          updateDeliveryStatus(id, status, extra);
           toast.success('Delivery status updated');
         }}
       />

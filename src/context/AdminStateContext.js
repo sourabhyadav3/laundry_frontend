@@ -5,6 +5,7 @@ import api from '../utils/api';
 import {
   mockRoles,
 } from '../data/mockData';
+import { CUSTOMER_AREAS } from '../constants/areas';
 
 export const GARMENT_CATALOG = [
   // Row 1
@@ -130,7 +131,7 @@ export const AdminStateProvider = ({ children }) => {
   const [drivers, setDrivers] = useState([]);
   const [branches, setBranches] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const [areas, setAreas] = useState([]);
+  const [areas, setAreas] = useState(CUSTOMER_AREAS);
   const [expenses, setExpenses] = useState([]);
   
   const [completedJobs, setCompletedJobs] = useState([]);
@@ -252,7 +253,12 @@ export const AdminStateProvider = ({ children }) => {
     });
     
     fetchResource('/areas', (data) => {
-      setAreas(data.map(a => a.name));
+      if (data && data.length > 0) {
+        const areaList = Array.from(new Set([...data.map(a => a.name), ...CUSTOMER_AREAS])).sort((a, b) => a.localeCompare(b));
+        setAreas(areaList);
+      } else {
+        setAreas(CUSTOMER_AREAS);
+      }
     });
     fetchResource('/expenses', setExpenses);
 
@@ -670,11 +676,14 @@ export const AdminStateProvider = ({ children }) => {
     }
   };
 
-  const updateDeliveryStatus = async (deliveryId, status) => {
+  const updateDeliveryStatus = async (deliveryId, status, extra = {}) => {
     try {
-      await api.put(`/deliveries/${deliveryId}/status`, { status });
+      const payload = typeof status === 'object' && status !== null
+        ? { ...status }
+        : { status, ...extra };
+      await api.put(`/deliveries/${deliveryId}/status`, payload);
       await fetchData();
-      toast.success(`Delivery status progressed: ${status}`);
+      toast.success(`Delivery status progressed: ${payload.status || status}`);
     } catch (e) {
       toast.error(e.response?.data?.message || 'Failed to update delivery status');
     }

@@ -1,7 +1,10 @@
 const statusTranslations = {
   'Waiting': 'قيد الانتظار',
   'Preparing': 'جاري التجهيز',
+  'Preparing in shop': 'قيد التحضير في المحل',
   'Preparing in workshop': 'جاري التجهيز في الورشة',
+  'Ironing': 'كي',
+  'Washing': 'غسيل',
   'Ready': 'جاهز',
   'Ready for delivery': 'جاهز للتوصيل',
   'Ready for pickup': 'جاهز للاستلام',
@@ -13,6 +16,10 @@ const statusTranslations = {
   'Out For Delivery': 'خارج للتوصيل',
   'Out for Delivery': 'خارج للتوصيل',
   'Delivered': 'تم التوصيل',
+  'Hold': 'معلق',
+  'Return': 'مرتجع',
+  'Store 1': 'مخزن 1',
+  'Store 2': 'مخزن 2',
   'Failed': 'فشل',
   'Paid': 'مدفوع',
   'Pending': 'معلق'

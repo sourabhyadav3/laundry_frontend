@@ -46,41 +46,31 @@ const Invoices = () => {
           const selStr = String(selectedBranch).toLowerCase();
           if (order.branchId && String(order.branchId).toLowerCase() === selStr) return true;
           if (order.branch && String(order.branch).toLowerCase() === selStr) return true;
-          if (order.transferredTo && String(order.transferredTo).toLowerCase() === selStr) return true;
-          if (order.transferredBranchName && String(order.transferredBranchName).toLowerCase() === selStr) return true;
-          if (Array.isArray(order.sharedBranches) && order.sharedBranches.some(b => String(b).toLowerCase() === selStr)) return true;
+          if (order.branchName && String(order.branchName).toLowerCase() === selStr) return true;
 
           const activeBranchObj = branches?.find(b => String(b.id || b._id).toLowerCase() === selStr || String(b.name || '').toLowerCase() === selStr);
           if (activeBranchObj) {
             const bId = String(activeBranchObj.id || activeBranchObj._id).toLowerCase();
             const bName = String(activeBranchObj.name || '').toLowerCase();
-            const bNameAr = String(activeBranchObj.nameAr || activeBranchObj.arabicName || '').toLowerCase();
             if (order.branchId && String(order.branchId).toLowerCase() === bId) return true;
-            if (order.transferredTo && String(order.transferredTo).toLowerCase() === bId) return true;
-            if (order.transferredBranchName && String(order.transferredBranchName).toLowerCase() === bName) return true;
-            if (Array.isArray(order.sharedBranches) && order.sharedBranches.some(b => String(b).toLowerCase() === bId)) return true;
-
-            // Section Branch item checking
-            const isCarpetBranch = bName.includes('carpet') || bName.includes('rug') || bNameAr.includes('سجاد');
-            const isShoeBranch = bName.includes('shoe') || bName.includes('footwear') || bNameAr.includes('أحذية') || bNameAr.includes('حذاء') || bNameAr.includes('جوتي');
-            const isWorkshopBranch = bName.includes('workshop') || bNameAr.includes('ورشة');
-
-            if (isCarpetBranch && Array.isArray(order.itemDetails)) {
-              if (order.itemDetails.some(it => /carpet|سجاد|rug/i.test(it.name || '') || /carpet|سجاد|rug/i.test(it.nameAr || ''))) return true;
-            }
-            if (isShoeBranch && Array.isArray(order.itemDetails)) {
-              if (order.itemDetails.some(it => /shoe|sneaker|boot|footwear|أحذية|حذاء|جوتي|شوز/i.test(it.name || '') || /أحذية|حذاء|جوتي|شوز|shoe/i.test(it.nameAr || ''))) return true;
-            }
-            if (isWorkshopBranch && (order.status === 'Preparing in workshop' || order.status === 'In Workshop' || (Array.isArray(order.itemDetails) && order.itemDetails.some(it => /carpet|curtain|blanket|heavy|سجاد|ستائر|بطانية|لحاف/i.test(it.name || ''))))) {
-              return true;
-            }
+            if (order.branch && String(order.branch).toLowerCase() === bName) return true;
+            if (order.branchName && String(order.branchName).toLowerCase() === bName) return true;
           }
           return false;
         })();
 
-        const matchesSearch =
-          order.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          order.customerName.toLowerCase().includes(searchTerm.toLowerCase());
+        const searchTokens = searchTerm
+          .split(/[,;\s]+/)
+          .map(t => t.trim().toLowerCase())
+          .filter(Boolean);
+
+        const orderNo = String(order.number || '').toLowerCase();
+        const custName = String(order.customerName || '').toLowerCase();
+        const custPhone = String(order.customerPhone || order.phone || '').toLowerCase();
+
+        const matchesSearch = searchTokens.length === 0 || searchTokens.some(term =>
+          orderNo.includes(term) || custName.includes(term) || custPhone.includes(term)
+        );
 
         const matchesStatus = statusFilter === 'All' || order.status === statusFilter;
         const matchesPayment = paymentFilter === 'All' || order.paymentStatus === paymentFilter;
