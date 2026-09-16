@@ -56,7 +56,6 @@ const Orders = () => {
           if (order.branch && String(order.branch).toLowerCase() === selStr) return true;
           if (order.transferredTo && String(order.transferredTo).toLowerCase() === selStr) return true;
           if (order.transferredBranchName && String(order.transferredBranchName).toLowerCase() === selStr) return true;
-          if (Array.isArray(order.sharedBranches) && order.sharedBranches.some(b => String(b).toLowerCase() === selStr)) return true;
 
           const activeBranchObj = branches?.find(b => String(b.id || b._id).toLowerCase() === selStr || String(b.name || '').toLowerCase() === selStr);
           if (activeBranchObj) {
@@ -64,14 +63,19 @@ const Orders = () => {
             const bName = String(activeBranchObj.name || '').toLowerCase();
             const bNameAr = String(activeBranchObj.nameAr || activeBranchObj.arabicName || '').toLowerCase();
             if (order.branchId && String(order.branchId).toLowerCase() === bId) return true;
+            if (order.branch && String(order.branch).toLowerCase() === bName) return true;
+            if (order.branchName && String(order.branchName).toLowerCase() === bName) return true;
             if (order.transferredTo && String(order.transferredTo).toLowerCase() === bId) return true;
             if (order.transferredBranchName && String(order.transferredBranchName).toLowerCase() === bName) return true;
-            if (Array.isArray(order.sharedBranches) && order.sharedBranches.some(b => String(b).toLowerCase() === bId)) return true;
 
             // Section Branch item checking
             const isCarpetBranch = bName.includes('carpet') || bName.includes('rug') || bNameAr.includes('سجاد');
             const isShoeBranch = bName.includes('shoe') || bName.includes('footwear') || bNameAr.includes('أحذية') || bNameAr.includes('حذاء') || bNameAr.includes('جوتي');
             const isWorkshopBranch = bName.includes('workshop') || bNameAr.includes('ورشة');
+
+            if (isCarpetBranch || isShoeBranch || isWorkshopBranch) {
+              if (Array.isArray(order.sharedBranches) && order.sharedBranches.some(b => String(b).toLowerCase() === bId || String(b).toLowerCase() === selStr)) return true;
+            }
 
             if (isCarpetBranch && Array.isArray(order.itemDetails)) {
               if (order.itemDetails.some(it => /carpet|سجاد|rug/i.test(it.name || '') || /carpet|سجاد|rug/i.test(it.nameAr || ''))) return true;

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { FiArrowLeft, FiSearch, FiLock, FiCheck, FiTrash2, FiX } from 'react-icons/fi';
+import React, { useState, useEffect, useMemo, useContext } from 'react';
+import { FiArrowLeft, FiSearch, FiLock, FiCheck, FiTrash2, FiX, FiUser, FiRefreshCw } from 'react-icons/fi';
 import { 
   FiHome, 
   FiUsers, 
@@ -16,102 +16,21 @@ import {
   FiCheckCircle,
   FiMapPin
 } from 'react-icons/fi';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
-
-const defaultRoles = [
-  {
-    name: 'Admin',
-    description: 'Full system administrator with complete access.',
-    color: 'bg-purple-500/10 text-purple-600 border-purple-500/15',
-  },
-  {
-    name: 'Counter Staff',
-    description: 'Counter desk operations, customers, new orders, invoices and payments.',
-    color: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/15',
-  },
-  {
-    name: 'Delivery Staff',
-    description: 'Logistics, route summaries, pickups and deliveries.',
-    color: 'bg-blue-500/10 text-blue-600 border-blue-500/15',
-  },
-];
-
-const permissionsList = [
-  { id: 'view_dashboard', label: 'Dashboard', category: 'General' },
-  { id: 'view_customers', label: 'Customers', category: 'General' },
-  { id: 'make_invoice', label: 'Make Invoice', category: 'Orders' },
-  { id: 'view_orders', label: 'Change invoice status', category: 'Orders' },
-  { id: 'view_invoice_status', label: 'Invoices', category: 'Orders' },
-  { id: 'view_pickups', label: 'Home Service', category: 'Logistics' },
-  { id: 'view_deliveries', label: 'Assigned Deliveries', category: 'Logistics' },
-  { id: 'view_completed_jobs', label: 'Completed Jobs', category: 'Logistics' },
-  { id: 'view_drivers', label: 'Drivers', category: 'Logistics' },
-  { id: 'view_order_tracking', label: 'Order Tracking', category: 'Orders' },
-  { id: 'manage_settings', label: 'Settings', category: 'Administration' },
-  { id: 'view_payments', label: 'Payments', category: 'Financials' },
-  { id: 'manage_branches', label: 'Branches', category: 'Administration' },
-  { id: 'view_services', label: 'Laundry Services', category: 'Services' },
-  { id: 'manage_staff', label: 'Staff Management', category: 'Administration' },
-  { id: 'view_reports', label: 'Reports', category: 'Analytics' },
-];
-
-const permissionGroups = {
-  'view_dashboard': ['view_dashboard'],
-  'view_customers': ['view_customers', 'manage_customers'],
-  'make_invoice': ['make_invoice', 'create_orders'],
-  'view_orders': ['view_orders', 'manage_orders', 'change_invoice_status'],
-  'view_invoice_status': ['view_invoice_status', 'view_invoice_details'],
-  'view_pickups': ['view_logistics', 'manage_logistics', 'manage_pickups'],
-  'view_deliveries': ['view_logistics', 'manage_logistics', 'manage_deliveries'],
-  'view_completed_jobs': ['view_logistics'],
-  'view_drivers': ['view_logistics', 'manage_staff'],
-  'view_order_tracking': ['view_orders'],
-  'manage_settings': ['manage_settings'],
-  'view_payments': ['view_payments', 'manage_payments'],
-  'manage_branches': ['manage_settings'],
-  'view_services': ['view_services', 'manage_services'],
-  'manage_staff': ['manage_staff', 'assign_roles'],
-  'view_reports': ['view_reports'],
-};
-
-const initialRolePermissions = {
-  'Admin': [
-    'view_dashboard', 'view_customers', 'manage_customers', 'view_orders', 'manage_orders', 
-    'view_invoice_status', 'change_invoice_status', 'make_invoice', 'view_invoice_details', 
-    'view_services', 'manage_services', 'view_logistics', 'manage_logistics', 
-    'view_payments', 'manage_payments', 'view_reports', 'manage_staff', 'assign_roles', 
-    'manage_permissions', 'manage_settings', 'full_access', 'create_records', 
-    'edit_records', 'delete_records', 'view_all_data', 'access_all_modules'
-  ],
-  'Counter Staff': [
-    'view_dashboard', 'view_customers', 'manage_customers', 'view_orders', 'make_invoice',
-    'view_invoice_status', 'change_invoice_status', 'view_invoice_details', 'view_payments',
-    'manage_payments', 'view_services', 'view_logistics'
-  ],
-  'Delivery Staff': [
-    'view_dashboard', 'view_logistics', 'view_invoice_status', 'change_invoice_status',
-    'view_customers', 'manage_customers', 'make_invoice', 'view_orders'
-  ],
-};
-
-const roleAllowedMenusWhitelist = {
-  'Admin': [
-    'view_dashboard', 'view_customers', 'view_orders', 'view_invoice_status', 
-    'manage_branches', 'make_invoice', 'view_services', 'view_pickups', 
-    'view_drivers', 'view_payments', 'manage_staff', 'view_reports', 'manage_settings'
-  ],
-  'Counter Staff': [
-    'view_dashboard', 'view_customers', 'make_invoice', 'view_orders', 
-    'view_invoice_status', 'view_payments', 'view_pickups', 'view_order_tracking', 
-    'manage_settings'
-  ],
-  'Delivery Staff': [
-    'view_dashboard', 'view_customers', 'make_invoice', 'view_orders', 
-    'view_invoice_status', 'view_pickups', 'view_deliveries', 'view_completed_jobs', 
-    'view_drivers', 'view_order_tracking', 'manage_settings'
-  ]
-};
+import { AdminStateContext } from '../../context/AdminStateContext';
+import { 
+  defaultRoles, 
+  permissionsList, 
+  permissionGroups, 
+  initialRolePermissions, 
+  roleAllowedMenusWhitelist,
+  getPermissionsForRole,
+  getUserCustomPermissions,
+  saveUserPermissions,
+  deleteUserPermissions,
+  getUserEffectivePermissions
+} from '../../utils/permissionUtils';
 
 const getPermissionIcon = (id) => {
   switch (id) {
@@ -152,44 +71,18 @@ const getPermissionIcon = (id) => {
   }
 };
 
-
-
-const runPermissionsMigration = () => {
-  const migratedFlag = localStorage.getItem('spinclean_permissions_migrated_v5');
-  if (migratedFlag) return;
-  const saved = localStorage.getItem('spinclean_role_permissions_v3');
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved);
-      Object.keys(parsed).forEach(role => {
-        const rolePerms = parsed[role] || [];
-        if (rolePerms.includes('view_logistics')) {
-          if (!rolePerms.includes('view_pickups')) rolePerms.push('view_pickups');
-          if (!rolePerms.includes('view_deliveries')) rolePerms.push('view_deliveries');
-          if (!rolePerms.includes('view_completed_jobs')) rolePerms.push('view_completed_jobs');
-          if (!rolePerms.includes('view_drivers')) rolePerms.push('view_drivers');
-        }
-        if (rolePerms.includes('view_orders')) {
-          if (!rolePerms.includes('view_order_tracking')) rolePerms.push('view_order_tracking');
-        }
-        if (rolePerms.includes('manage_settings')) {
-          if (!rolePerms.includes('manage_branches')) rolePerms.push('manage_branches');
-        }
-        if ((role === 'Counter Staff' || role === 'Delivery Staff') && !rolePerms.includes('manage_settings')) {
-          rolePerms.push('manage_settings');
-        }
-      });
-      localStorage.setItem('spinclean_role_permissions_v3', JSON.stringify(parsed));
-    } catch (e) {}
-  }
-  localStorage.setItem('spinclean_permissions_migrated_v5', 'true');
-};
-runPermissionsMigration();
-
 const RolesPermissions = () => {
   const navigate = useNavigate();
-  // const { staff = [] } = useContext(AdminStateContext) || {};
+  const location = useLocation();
+  const { staff = [], updateStaff } = useContext(AdminStateContext) || {};
   
+  // Read optional query param ?userId=...
+  const queryParams = new URLSearchParams(location.search);
+  const initialUserIdParam = queryParams.get('userId');
+
+  // Mode: 'roles' (Role Defaults) vs 'users' (User-Based)
+  const [activeTab, setActiveTab] = useState(initialUserIdParam ? 'users' : 'roles');
+
   // State for Roles
   const [roles, setRoles] = useState(() => {
     const saved = localStorage.getItem('spinclean_roles_list_v3');
@@ -201,7 +94,7 @@ const RolesPermissions = () => {
     return defaultRoles;
   });
 
-  // State for Permissions
+  // State for Role Permissions
   const [rolePermissions, setRolePermissions] = useState(() => {
     const saved = localStorage.getItem('spinclean_role_permissions_v3');
     if (saved) {
@@ -212,18 +105,21 @@ const RolesPermissions = () => {
     return initialRolePermissions;
   });
 
-  // Save roles and permissions to localStorage
-  useEffect(() => {
-    localStorage.setItem('spinclean_roles_list_v3', JSON.stringify(roles));
-  }, [roles]);
-
-  useEffect(() => {
-    localStorage.setItem('spinclean_role_permissions_v3', JSON.stringify(rolePermissions));
-  }, [rolePermissions]);
-
+  // Selected state
   const [selectedRole, setSelectedRole] = useState('Admin');
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Selected Staff for User-Based mode
+  const [selectedStaffId, setSelectedStaffId] = useState(() => {
+    if (initialUserIdParam) return initialUserIdParam;
+    return staff.length > 0 ? (staff[0].id || staff[0]._id || staff[0].username) : '';
+  });
+
+  const selectedStaffObj = useMemo(() => {
+    if (!selectedStaffId) return staff[0] || null;
+    return staff.find(s => String(s.id || s._id || s.username) === String(selectedStaffId)) || staff[0] || null;
+  }, [staff, selectedStaffId]);
+
   // Create Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newRoleName, setNewRoleName] = useState('');
@@ -233,7 +129,7 @@ const RolesPermissions = () => {
   const expandPermissions = (ids) => {
     const result = new Set();
     ids.forEach(id => {
-      result.add(id); // Keep the UI key itself
+      result.add(id);
       if (permissionGroups[id]) {
         permissionGroups[id].forEach(subId => result.add(subId));
       }
@@ -246,19 +142,36 @@ const RolesPermissions = () => {
     return permissionsList.map(p => p.id).filter(id => ids.includes(id));
   };
 
-  // State of permissions checked in UI for the selected role
+  // State of checked permissions in UI
   const [currentPermissions, setCurrentPermissions] = useState([]);
 
+  // Load permissions when switching roles or users
   useEffect(() => {
-    const rawPermissions = rolePermissions[selectedRole] || [];
-    setCurrentPermissions(contractPermissions(rawPermissions));
-  }, [selectedRole, rolePermissions]);
+    if (activeTab === 'roles') {
+      const rawPermissions = rolePermissions[selectedRole] || [];
+      setCurrentPermissions(contractPermissions(rawPermissions));
+    } else if (activeTab === 'users' && selectedStaffObj) {
+      const effective = getUserEffectivePermissions(selectedStaffObj);
+      setCurrentPermissions(contractPermissions(effective));
+    }
+  }, [activeTab, selectedRole, rolePermissions, selectedStaffObj]);
+
+  const hasCustomUserOverride = useMemo(() => {
+    if (!selectedStaffObj) return false;
+    return Boolean(getUserCustomPermissions(selectedStaffObj));
+  }, [selectedStaffObj]);
 
   const filteredPermissionsList = useMemo(() => {
+    if (activeTab === 'users' && selectedStaffObj) {
+      const staffRole = selectedStaffObj.role?.name || selectedStaffObj.role || 'Admin';
+      const whitelist = roleAllowedMenusWhitelist[staffRole];
+      if (!whitelist) return permissionsList;
+      return permissionsList.filter(perm => whitelist.includes(perm.id));
+    }
     const whitelist = roleAllowedMenusWhitelist[selectedRole];
     if (!whitelist) return permissionsList;
     return permissionsList.filter(perm => whitelist.includes(perm.id));
-  }, [selectedRole]);
+  }, [activeTab, selectedRole, selectedStaffObj]);
 
   const handleTogglePermission = (permId) => {
     setCurrentPermissions(prev => 
@@ -268,18 +181,40 @@ const RolesPermissions = () => {
     );
   };
 
-  const handleUpdatePermissions = () => {
+  // Save changes
+  const handleUpdatePermissions = async () => {
     const expanded = expandPermissions(currentPermissions);
-    setRolePermissions(prev => ({
-      ...prev,
-      [selectedRole]: expanded
-    }));
-    const language = localStorage.getItem('language') || 'en';
-    toast.success(
-      language === 'ar' 
-        ? `${selectedRole} تم تحديث صلاحيات` 
-        : `${selectedRole} permissions updated successfully`
-    );
+
+    if (activeTab === 'roles') {
+      const updated = {
+        ...rolePermissions,
+        [selectedRole]: expanded
+      };
+      setRolePermissions(updated);
+      localStorage.setItem('spinclean_role_permissions_v3', JSON.stringify(updated));
+      toast.success(`${selectedRole} default permissions updated successfully!`);
+    } else if (activeTab === 'users' && selectedStaffObj) {
+      saveUserPermissions(selectedStaffObj, expanded);
+      
+      // Update backend if updateStaff is available
+      if (updateStaff && (selectedStaffObj.id || selectedStaffObj._id)) {
+        try {
+          await updateStaff(selectedStaffObj.id || selectedStaffObj._id, { customPermissions: expanded });
+        } catch (e) {}
+      }
+
+      toast.success(`Custom permissions for "${selectedStaffObj.name || selectedStaffObj.username}" saved successfully!`);
+    }
+  };
+
+  // Reset user override to role default
+  const handleResetUserToDefault = () => {
+    if (!selectedStaffObj) return;
+    deleteUserPermissions(selectedStaffObj);
+    const staffRole = selectedStaffObj.role?.name || selectedStaffObj.role || 'Admin';
+    const defaultRolePerms = getPermissionsForRole(staffRole);
+    setCurrentPermissions(contractPermissions(defaultRolePerms));
+    toast.info(`Permissions for "${selectedStaffObj.name || selectedStaffObj.username}" reset to ${staffRole} default.`);
   };
 
   const handleCreateRoleSubmit = () => {
@@ -311,6 +246,8 @@ const RolesPermissions = () => {
 
     const updatedRoles = [...roles, newRole];
     setRoles(updatedRoles);
+    localStorage.setItem('spinclean_roles_list_v3', JSON.stringify(updatedRoles));
+    
     setRolePermissions(prev => ({
       ...prev,
       [trimmedName]: []
@@ -325,10 +262,13 @@ const RolesPermissions = () => {
 
   const handleDeleteRole = (roleName) => {
     if (window.confirm(`Are you sure you want to delete the role "${roleName}"?`)) {
-      setRoles(prev => prev.filter(r => r.name !== roleName));
+      const updated = roles.filter(r => r.name !== roleName);
+      setRoles(updated);
+      localStorage.setItem('spinclean_roles_list_v3', JSON.stringify(updated));
       setRolePermissions(prev => {
         const copy = { ...prev };
         delete copy[roleName];
+        localStorage.setItem('spinclean_role_permissions_v3', JSON.stringify(copy));
         return copy;
       });
       if (selectedRole === roleName) {
@@ -345,6 +285,15 @@ const RolesPermissions = () => {
     );
   }, [roles, searchQuery]);
 
+  // Filter staff by search query
+  const filteredStaffList = useMemo(() => {
+    return staff.filter(s => 
+      (s.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.username || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.email || '').toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [staff, searchQuery]);
+
   return (
     <div className="space-y-6">
       {/* Header with Title & Action */}
@@ -358,68 +307,168 @@ const RolesPermissions = () => {
           </button>
           <div>
             <h1 className="text-3xl font-bold text-primary">Roles & Permissions</h1>
-            <p className="mt-1 text-sm text-secondary">Granular access control and permission management for all platform roles</p>
+            <p className="mt-1 text-sm text-secondary">
+              Granular access control and permission management for platform roles and individual users
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Search roles bar */}
-      <div className="relative w-full">
-        <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-secondary">
-          <FiSearch size={18} />
-        </span>
-        <input
-          type="text"
-          placeholder="Search roles.."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-11 pr-4 py-3 rounded-2xl border border-border bg-surface text-primary text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition shadow-sm"
-        />
+      {/* Mode Switcher Tabs: Role Defaults vs User-Based */}
+      <div className="flex items-center gap-2 border-b border-border pb-1">
+        <button
+          onClick={() => setActiveTab('roles')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold transition ${
+            activeTab === 'roles'
+              ? 'bg-indigo-600 text-white shadow-md'
+              : 'bg-surface border border-border text-secondary hover:text-primary'
+          }`}
+        >
+          <FiUsers size={16} />
+          <span>Role Defaults (Global)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold transition ${
+            activeTab === 'users'
+              ? 'bg-indigo-600 text-white shadow-md'
+              : 'bg-surface border border-border text-secondary hover:text-primary'
+          }`}
+        >
+          <FiUser size={16} />
+          <span>Individual User Permissions (Per-User)</span>
+        </button>
       </div>
 
-      {/* Platform Roles Header & Grid */}
-      <div className="space-y-3">
-        <span className="text-xs font-bold text-secondary uppercase tracking-wider">PLATFORM ROLES</span>
-        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4 animate-fadeIn">
-          {filteredRoles.map((role) => {
-            const isSelected = selectedRole === role.name;
-            return (
-              <div
-                key={role.name}
-                onClick={() => setSelectedRole(role.name)}
-                className={`flex items-center gap-4 p-5 rounded-2xl border transition-all duration-200 cursor-pointer select-none relative group ${
-                  isSelected 
-                    ? 'border-indigo-600 bg-indigo-500/5 ring-2 ring-indigo-500/20 shadow-md'
-                    : 'border-border bg-surface hover:border-slate-400'
-                }`}
-              >
-                <div className={`flex items-center justify-center w-6 h-6 rounded-full border-2 transition-all ${
-                  isSelected 
-                    ? 'border-indigo-600 bg-indigo-600 text-white' 
-                    : 'border-slate-300 bg-transparent'
-                }`}>
-                  {isSelected && <FiCheck size={14} />}
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-primary text-sm">{role.name}</h3>
-                </div>
-                {!['Admin', 'Counter Staff', 'Delivery Staff'].includes(role.name) && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteRole(role.name);
-                    }}
-                    className="absolute top-2 right-2 text-secondary hover:text-rose-600 p-1 rounded-lg transition opacity-0 group-hover:opacity-100"
-                    title="Delete custom role"
+      {/* TAB 1: Role Defaults Mode */}
+      {activeTab === 'roles' && (
+        <>
+          {/* Search roles bar */}
+          <div className="relative w-full">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-secondary">
+              <FiSearch size={18} />
+            </span>
+            <input
+              type="text"
+              placeholder="Search roles.."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-11 pr-4 py-3 rounded-2xl border border-border bg-surface text-primary text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition shadow-sm"
+            />
+          </div>
+
+          {/* Platform Roles Header & Grid */}
+          <div className="space-y-3">
+            <span className="text-xs font-bold text-secondary uppercase tracking-wider">PLATFORM ROLES</span>
+            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4 animate-fadeIn">
+              {filteredRoles.map((role) => {
+                const isSelected = selectedRole === role.name;
+                return (
+                  <div
+                    key={role.name}
+                    onClick={() => setSelectedRole(role.name)}
+                    className={`flex items-center gap-4 p-5 rounded-2xl border transition-all duration-200 cursor-pointer select-none relative group ${
+                      isSelected 
+                        ? 'border-indigo-600 bg-indigo-500/5 ring-2 ring-indigo-500/20 shadow-md'
+                        : 'border-border bg-surface hover:border-slate-400'
+                    }`}
                   >
-                    <FiTrash2 size={15} />
-                  </button>
-                )}
+                    <div className={`flex items-center justify-center w-6 h-6 rounded-full border-2 transition-all ${
+                      isSelected 
+                        ? 'border-indigo-600 bg-indigo-600 text-white' 
+                        : 'border-slate-300 bg-transparent'
+                    }`}>
+                      {isSelected && <FiCheck size={14} />}
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-primary text-sm">{role.name}</h3>
+                    </div>
+                    {!['Admin', 'Counter Staff', 'Delivery Staff'].includes(role.name) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteRole(role.name);
+                        }}
+                        className="absolute top-2 right-2 text-secondary hover:text-rose-600 p-1 rounded-lg transition opacity-0 group-hover:opacity-100"
+                        title="Delete custom role"
+                      >
+                        <FiTrash2 size={15} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* TAB 2: User-Based Permissions Mode */}
+      {activeTab === 'users' && (
+        <div className="space-y-4">
+          <div className="surface-card border border-border p-5 rounded-2xl space-y-3">
+            <span className="text-xs font-bold text-secondary uppercase tracking-wider">SELECT STAFF MEMBER</span>
+            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+              <div>
+                <label className="block text-xs font-semibold text-secondary uppercase mb-1">Staff User</label>
+                <select
+                  value={selectedStaffId}
+                  onChange={(e) => setSelectedStaffId(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface text-primary text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                >
+                  {filteredStaffList.map(s => (
+                    <option key={s.id || s._id || s.username} value={s.id || s._id || s.username}>
+                      {s.name || s.username} — ({s.role?.name || s.role || 'Staff'})
+                    </option>
+                  ))}
+                </select>
               </div>
-            );
-          })}
+
+              {selectedStaffObj && (
+                <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 bg-surface-alt p-3.5 rounded-xl border border-border">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-primary text-sm">{selectedStaffObj.name || selectedStaffObj.username}</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-indigo-500/10 text-indigo-600 border border-indigo-500/20">
+                        {selectedStaffObj.role?.name || selectedStaffObj.role || 'Staff'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-secondary mt-0.5">
+                      Username: <span className="font-semibold text-primary">{selectedStaffObj.username}</span> | Email: <span className="font-semibold text-primary">{selectedStaffObj.email || 'N/A'}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {hasCustomUserOverride ? (
+                      <span className="px-2.5 py-1 rounded-full text-xs font-extrabold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                        <span>✨</span>
+                        <span>Custom User Permissions Active</span>
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-500/10 text-secondary border border-border/50 flex items-center gap-1">
+                        <span>🛡️</span>
+                        <span>Inheriting Role Defaults</span>
+                      </span>
+                    )}
+
+                    {hasCustomUserOverride && (
+                      <button
+                        onClick={handleResetUserToDefault}
+                        className="px-3 py-1 bg-surface hover:bg-slate-500/10 text-rose-600 border border-border rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-sm"
+                        title="Revert to role default permissions"
+                      >
+                        <FiRefreshCw size={12} />
+                        <span>Reset to Role</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Permissions Matrix Container */}
       <div className="surface-card border border-border rounded-2xl shadow-xl overflow-hidden mt-6">
@@ -430,9 +479,17 @@ const RolesPermissions = () => {
               <FiLock size={22} className="text-indigo-400" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-primary">{selectedRole} Permissions Matrix</h2>
+              <h2 className="text-lg font-bold text-primary">
+                {activeTab === 'roles' 
+                  ? `${selectedRole} Default Permissions Matrix`
+                  : `Permissions for ${selectedStaffObj ? (selectedStaffObj.name || selectedStaffObj.username) : 'Selected User'}`
+                }
+              </h2>
               <p className="text-[10px] font-semibold text-secondary tracking-wider uppercase mt-0.5">
-                CONFIGURE MODULE ACCESS & CAPABILITIES
+                {activeTab === 'roles' 
+                  ? 'CONFIGURE DEFAULT MODULE ACCESS FOR ALL USERS WITH THIS ROLE' 
+                  : 'CONFIGURE INDIVIDUAL MODULE ACCESS OVERRIDE FOR THIS USER'
+                }
               </p>
             </div>
           </div>
@@ -441,14 +498,14 @@ const RolesPermissions = () => {
             onClick={handleUpdatePermissions}
             className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-6 rounded-xl shadow transition duration-200 text-sm w-full sm:w-auto text-center"
           >
-            Update
+            {activeTab === 'roles' ? 'Update Role Defaults' : 'Save User Permissions'}
           </button>
         </div>
 
         {/* Table Columns Header */}
         <div className="grid grid-cols-2 px-8 py-4 bg-slate-500/5 border-b border-border text-[10px] font-bold text-secondary tracking-wider uppercase">
           <div>MODULE / CAPABILITY</div>
-          <div className="text-right">VISIBLE</div>
+          <div className="text-right">ACCESS ALLOWED</div>
         </div>
 
         {/* Matrix Rows */}

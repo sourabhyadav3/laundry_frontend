@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { FiLogOut } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { useLanguage } from '../context/LanguageContext';
+import { hasUserPermission } from '../utils/permissionUtils';
 
 
 
@@ -49,43 +50,6 @@ const RoleSidebar = ({ menuItems, roleLabel, footerText }) => {
   // Get active role and dynamic permissions from localStorage
   const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
   const userRole = storedUser.role || '';
-
-  const getPermissionsForRole = (role) => {
-    const defaultPermissions = {
-      'Admin': [
-        'view_dashboard', 'view_customers', 'manage_customers', 'view_orders', 'manage_orders', 
-        'view_invoice_status', 'change_invoice_status', 'make_invoice', 'view_invoice_details', 
-        'view_services', 'manage_services', 'view_logistics', 'manage_logistics', 
-        'view_payments', 'manage_payments', 'view_reports', 'manage_staff', 'assign_roles', 
-        'manage_permissions', 'manage_settings', 'full_access', 'create_records', 
-        'edit_records', 'delete_records', 'view_all_data', 'access_all_modules'
-      ],
-      'Counter Staff': [
-        'view_dashboard', 'view_customers', 'manage_customers', 'view_orders', 'make_invoice',
-        'view_invoice_status', 'change_invoice_status', 'view_invoice_details', 'view_payments',
-        'manage_payments', 'view_services', 'view_logistics'
-      ],
-      'Delivery Staff': [
-        'view_dashboard', 'view_logistics', 'view_invoice_status', 'change_invoice_status',
-        'view_customers', 'manage_customers', 'make_invoice', 'view_orders'
-      ],
-    };
-
-    const saved = localStorage.getItem('spinclean_role_permissions_v3');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed[role]) {
-          return parsed[role];
-        }
-      } catch (e) {
-        console.error("Failed to parse role permissions", e);
-      }
-    }
-    return defaultPermissions[role] || [];
-  };
-
-  const allowedPermissions = getPermissionsForRole(userRole);
 
   const getTranslatedLabel = (label) => {
     switch (label) {
@@ -162,7 +126,7 @@ const RoleSidebar = ({ menuItems, roleLabel, footerText }) => {
 
           <nav className="flex-1 space-y-2">
             {menuItems
-              .filter((item) => !item.permission || allowedPermissions.includes(item.permission))
+              .filter((item) => !item.permission || hasUserPermission(storedUser, item.permission))
               .map((item) => (
                 <NavLink
                   key={item.label}

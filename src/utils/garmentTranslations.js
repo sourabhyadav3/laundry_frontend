@@ -74,6 +74,8 @@ export const GARMENT_NAME_MAP = {
   ghutra: 'غترة',
   ghotraa: 'غترة',
   shmage: 'شماغ',
+  shawl: 'شال',
+  shwal: 'شال',
   bisht: 'بشت',
   hijab: 'حجاب',
   hegab: 'حجاب',

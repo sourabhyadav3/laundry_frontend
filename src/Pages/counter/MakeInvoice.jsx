@@ -276,6 +276,7 @@ const MakeInvoice = () => {
   const [selectedGarmentForCarpet, setSelectedGarmentForCarpet] = useState(null);
   const [carpetHeightM, setCarpetHeightM] = useState('');
   const [carpetWidthM, setCarpetWidthM] = useState('');
+  const [carpetRatePerSqm, setCarpetRatePerSqm] = useState('');
 
   const [orderItems, setOrderItems] = useState(() => {
     const saved = localStorage.getItem(draftItemsKey);
@@ -1514,7 +1515,7 @@ const MakeInvoice = () => {
                         return;
                       }
 
-                      const needsModifier =
+                      const isGhotraOrShmage =
                         key === 'ghotraa' ||
                         name === 'ghotraa' ||
                         key === 'shmage' ||
@@ -1522,8 +1523,22 @@ const MakeInvoice = () => {
                         key === 'shmagespecial' ||
                         name === 'shmage (special)';
 
+                      const isShawl =
+                        key === 'shawl' ||
+                        name === 'shawl' ||
+                        key === 'shwal' ||
+                        name === 'shwal' ||
+                        key.toLowerCase().includes('shawl') ||
+                        name.toLowerCase().includes('shawl') ||
+                        String(g.nameAr || '').includes('شال') ||
+                        String(g.name || '').toLowerCase().includes('shawl');
+
+                      const needsModifier = isGhotraOrShmage || isShawl;
+
                       if (isCarpet) {
+                        const defaultRate = getGarmentPriceForService(g, quickServiceMode) || 0.750;
                         setSelectedGarmentForCarpet(g);
+                        setCarpetRatePerSqm(String(defaultRate));
                         setCarpetHeightM('');
                         setCarpetWidthM('');
                       } else if (needsModifier) {
@@ -2371,13 +2386,16 @@ const MakeInvoice = () => {
 
       {/* ===== CARPET SIZE MODAL ===== */}
       {selectedGarmentForCarpet && (() => {
-        const ratePerSqm = getGarmentPriceForService(selectedGarmentForCarpet, quickServiceMode);
+        const defaultRate = getGarmentPriceForService(selectedGarmentForCarpet, quickServiceMode) || 0.750;
         const parseDim = (val) => {
           const n = Number(String(val).replace(',', '.'));
           return Number.isFinite(n) && n > 0 ? n : 0;
         };
         const height = parseDim(carpetHeightM);
         const width = parseDim(carpetWidthM);
+        const ratePerSqm = carpetRatePerSqm !== '' && !isNaN(Number(carpetRatePerSqm)) && Number(carpetRatePerSqm) >= 0
+          ? Number(carpetRatePerSqm)
+          : Number(defaultRate);
         const areaSqm = height > 0 && width > 0 ? Math.round(height * width * 1000) / 1000 : 0;
         const totalPrice = Math.round(ratePerSqm * areaSqm * 1000) / 1000;
 
@@ -2394,9 +2412,9 @@ const MakeInvoice = () => {
                 ) : (
                   <span className="text-5xl mb-3 block drop-shadow-md">{selectedGarmentForCarpet.icon}</span>
                 )}
-                <h2 className="text-xl font-extrabold tracking-tight">Carpet Size</h2>
+                <h2 className="text-xl font-extrabold tracking-tight">{language === 'ar' ? 'مقاس وسعر السجاد' : 'Carpet Size & Rate'}</h2>
                 <p className="text-xs text-secondary mt-1">
-                  Rate: <span className="font-mono font-bold text-primary">{formatCurrency(ratePerSqm)}</span> / sq meter
+                  {language === 'ar' ? 'السعر الافتراضي' : 'Default Rate'}: <span className="font-mono font-bold text-primary">{formatCurrency(defaultRate)}</span> / {language === 'ar' ? 'متر مربع' : 'sq meter'}
                 </p>
               </div>
 
@@ -2404,7 +2422,7 @@ const MakeInvoice = () => {
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-xs font-semibold uppercase tracking-wider text-secondary mb-1">
-                      Height (m)
+                      {language === 'ar' ? 'الارتفاع (متر)' : 'Height (m)'}
                     </label>
                     <input
                       type="number"
@@ -2419,7 +2437,7 @@ const MakeInvoice = () => {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold uppercase tracking-wider text-secondary mb-1">
-                      Width (m)
+                      {language === 'ar' ? 'العرض (متر)' : 'Width (m)'}
                     </label>
                     <input
                       type="number"
@@ -2434,15 +2452,37 @@ const MakeInvoice = () => {
                   </div>
                 </div>
 
+                {/* Editable Price per Sqm */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-secondary">
+                      {language === 'ar' ? 'سعر المتر المربع (د.ك)' : 'Price / Rate per Sqm (KWD)'}
+                    </label>
+                    <span className="text-[10px] text-blue-500 font-semibold">{language === 'ar' ? 'قابل للتعديل' : 'Editable'}</span>
+                  </div>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.050"
+                    placeholder="0.750"
+                    value={carpetRatePerSqm}
+                    onChange={(e) => setCarpetRatePerSqm(e.target.value)}
+                    className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm font-mono font-bold text-blue-600 dark:text-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                  />
+                </div>
+
                 {areaSqm > 0 && (
-                  <div className="text-center text-xs font-mono text-secondary">
-                    {height} × {width} = <span className="font-bold text-primary">{areaSqm} sqm</span>
+                  <div className="text-center text-xs font-mono text-secondary bg-surface-alt/40 p-2 rounded-xl border border-border/40">
+                    <span>{height}m × {width}m = <b className="text-primary">{areaSqm} sqm</b></span>
+                    <span className="mx-2">•</span>
+                    <span>@ <b className="text-emerald-500 font-bold">{formatCurrency(ratePerSqm)}/sqm</b></span>
                   </div>
                 )}
 
-                <div className="flex items-center justify-between rounded-xl border border-border bg-surface-alt/40 px-3 py-2 text-sm">
-                  <span className="text-secondary font-semibold">Total</span>
-                  <span className="font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
+                <div className="flex items-center justify-between rounded-xl border border-border bg-surface-alt/60 px-3 py-2.5 text-sm">
+                  <span className="text-secondary font-semibold">{language === 'ar' ? 'الإجمالي' : 'Total'}</span>
+                  <span className="font-mono font-extrabold text-emerald-600 dark:text-emerald-400 text-base">
                     {areaSqm > 0 ? formatCurrency(totalPrice) : '—'}
                   </span>
                 </div>
@@ -2451,7 +2491,8 @@ const MakeInvoice = () => {
                   type="button"
                   disabled={areaSqm <= 0}
                   onClick={() => {
-                    const note = `Size: ${height} × ${width} m (${areaSqm} sqm)`;
+                    const formattedRate = formatCurrency(ratePerSqm);
+                    const note = `Size: ${height} × ${width} m (${areaSqm} sqm @ ${formattedRate}/sqm)`;
                     addGarment(
                       {
                         ...selectedGarmentForCarpet,
@@ -2469,7 +2510,7 @@ const MakeInvoice = () => {
                   }`}
                   style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', boxShadow: '0 4px 14px rgba(59,130,246,0.4)' }}
                 >
-                  ✅ Confirm & Add
+                  {language === 'ar' ? '✅ تأكيد وإضافة' : '✅ Confirm & Add'}
                 </button>
               </div>
             </div>
@@ -2480,6 +2521,13 @@ const MakeInvoice = () => {
       {/* ===== MODIFIER SELECTION MODAL ===== */}
       {selectedGarmentForModifier && (() => {
           const isLight = theme === 'light';
+          const isShawl =
+              (selectedGarmentForModifier.key || '').toLowerCase().includes('shawl') ||
+              (selectedGarmentForModifier.name || '').toLowerCase().includes('shawl') ||
+              (selectedGarmentForModifier.key || '').toLowerCase().includes('shwal') ||
+              (selectedGarmentForModifier.name || '').toLowerCase().includes('shwal') ||
+              String(selectedGarmentForModifier.nameAr || '').includes('شال');
+
           return (
               <div className="fixed -inset-4 z-[3000] flex items-center justify-center p-8 outline-none" style={{ backdropFilter: 'blur(8px)', backgroundColor: isLight ? 'rgba(15,23,42,0.35)' : 'rgba(0,0,0,0.65)' }}>
                   <div className={`relative w-full max-w-lg rounded-3xl p-6 shadow-2xl border border-border bg-surface text-primary outline-none`} onClick={e => e.stopPropagation()}>
@@ -2496,65 +2544,70 @@ const MakeInvoice = () => {
                       </div>
                       
                       <div className="space-y-6">
-                          {/* Neel Toggle */}
-                          <div className="flex items-center gap-3 p-3 bg-surface-alt rounded-xl border border-border cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/20" onClick={() => setModifierForm(p => ({...p, neel: !p.neel}))}>
-                              <div className={`w-6 h-6 rounded flex items-center justify-center border-2 ${modifierForm.neel ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-slate-600'}`}>
-                                  {modifierForm.neel && <FiCheck size={16} />}
-                              </div>
-                              <span className="font-bold text-lg text-primary">Neel (نيل)</span>
-                          </div>
+                          {/* Only show Neel & Color Choice for Ghotra / Shmage, not for Shawl */}
+                          {!isShawl && (
+                              <>
+                                  {/* Neel Toggle */}
+                                  <div className="flex items-center gap-3 p-3 bg-surface-alt rounded-xl border border-border cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/20" onClick={() => setModifierForm(p => ({...p, neel: !p.neel}))}>
+                                      <div className={`w-6 h-6 rounded flex items-center justify-center border-2 ${modifierForm.neel ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-slate-600'}`}>
+                                          {modifierForm.neel && <FiCheck size={16} />}
+                                      </div>
+                                      <span className="font-bold text-lg text-primary">Neel (نيل)</span>
+                                  </div>
 
-                          {/* Required Color Choice */}
-                          <div>
-                              <label className="block text-xs font-semibold uppercase tracking-wider text-secondary mb-2">Color Choice</label>
-                              <div className="grid grid-cols-1 gap-2">
-                                  {[
-                                      {
-                                          label: 'White',
-                                          value: 'White',
-                                          active: 'border-slate-300 bg-white/60 dark:border-slate-500/40 dark:bg-slate-800/50',
-                                          idle: 'border-border bg-surface-alt hover:border-slate-300 hover:bg-white/40 dark:hover:border-slate-600/40 dark:hover:bg-slate-800/30',
-                                      },
-                                  ].map(opt => (
-                                      <button
-                                          key={opt.value}
-                                          type="button"
-                                          onClick={() =>
-                                              setModifierForm((p) => ({
-                                                  ...p,
-                                                  colorChoice: p.colorChoice === opt.value ? '' : opt.value,
-                                              }))
-                                          }
-                                          aria-pressed={modifierForm.colorChoice === opt.value}
-                                          className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 ${
-                                              modifierForm.colorChoice === opt.value ? opt.active : opt.idle
-                                          }`}
-                                      >
-                                          <div
-                                              className={`w-6 h-6 rounded flex items-center justify-center border-2 ${
-                                                  modifierForm.colorChoice === opt.value
-                                                      ? 'bg-blue-600 border-blue-600 text-white'
-                                                      : 'border-slate-300 dark:border-slate-600'
-                                              }`}
-                                          >
-                                              {modifierForm.colorChoice === opt.value && <FiCheck size={16} />}
-                                          </div>
-                                          <div className="flex items-center gap-2 min-w-0">
-                                              <span
-                                                  className="text-sm font-extrabold"
-                                                  style={{ color: isLight ? '#000000' : '#ffffff' }}
+                                  {/* Required Color Choice */}
+                                  <div>
+                                      <label className="block text-xs font-semibold uppercase tracking-wider text-secondary mb-2">Color Choice</label>
+                                      <div className="grid grid-cols-1 gap-2">
+                                          {[
+                                              {
+                                                  label: 'White',
+                                                  value: 'White',
+                                                  active: 'border-slate-300 bg-white/60 dark:border-slate-500/40 dark:bg-slate-800/50',
+                                                  idle: 'border-border bg-surface-alt hover:border-slate-300 hover:bg-white/40 dark:hover:border-slate-600/40 dark:hover:bg-slate-800/30',
+                                              },
+                                          ].map(opt => (
+                                              <button
+                                                  key={opt.value}
+                                                  type="button"
+                                                  onClick={() =>
+                                                      setModifierForm((p) => ({
+                                                          ...p,
+                                                          colorChoice: p.colorChoice === opt.value ? '' : opt.value,
+                                                      }))
+                                                  }
+                                                  aria-pressed={modifierForm.colorChoice === opt.value}
+                                                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 ${
+                                                      modifierForm.colorChoice === opt.value ? opt.active : opt.idle
+                                                  }`}
                                               >
-                                                  {opt.label}
-                                              </span>
-                                              <span
-                                                  className="w-3 h-3 rounded-full border border-black/10 dark:border-white/10 shrink-0"
-                                                  style={{ backgroundColor: opt.value === 'Red' ? '#e11d48' : '#ffffff' }}
-                                              />
-                                          </div>
-                                      </button>
-                                  ))}
-                              </div>
-                          </div>
+                                                  <div
+                                                      className={`w-6 h-6 rounded flex items-center justify-center border-2 ${
+                                                          modifierForm.colorChoice === opt.value
+                                                              ? 'bg-blue-600 border-blue-600 text-white'
+                                                              : 'border-slate-300 dark:border-slate-600'
+                                                      }`}
+                                                  >
+                                                      {modifierForm.colorChoice === opt.value && <FiCheck size={16} />}
+                                                  </div>
+                                                  <div className="flex items-center gap-2 min-w-0">
+                                                      <span
+                                                          className="text-sm font-extrabold"
+                                                          style={{ color: isLight ? '#000000' : '#ffffff' }}
+                                                      >
+                                                          {opt.label}
+                                                      </span>
+                                                      <span
+                                                          className="w-3 h-3 rounded-full border border-black/10 dark:border-white/10 shrink-0"
+                                                          style={{ backgroundColor: opt.value === 'Red' ? '#e11d48' : '#ffffff' }}
+                                                      />
+                                                  </div>
+                                              </button>
+                                          ))}
+                                      </div>
+                                  </div>
+                              </>
+                          )}
 
                           {/* Fold Options */}
                           <div>
@@ -2595,8 +2648,10 @@ const MakeInvoice = () => {
                           type="button"
                           onClick={() => {
                               const parts = [];
-                              if (modifierForm.neel) parts.push("Neel");
+                              if (!isShawl) {
+                                  if (modifierForm.neel) parts.push("Neel");
                                   if (modifierForm.colorChoice) parts.push(`Color: ${modifierForm.colorChoice}`);
+                              }
                               if (modifierForm.fold && modifierForm.fold !== 'Normal') parts.push(`Fold: ${modifierForm.fold}`);
                               if (modifierForm.starch && modifierForm.starch !== 'Without') parts.push(`Starch: ${modifierForm.starch}`);
                               const note = parts.join(' | ');

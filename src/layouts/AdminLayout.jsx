@@ -26,6 +26,7 @@ import { toast } from 'react-toastify';
 import '../styles/admin.css';
 import { FiLock } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
+import { hasUserPermission } from '../utils/permissionUtils';
 
 const AdminLayout = ({ children }) => {
   const adminState = useContext(AdminStateContext);
@@ -35,35 +36,6 @@ const AdminLayout = ({ children }) => {
   const path = location.pathname;
 
   const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const userRole = storedUser.role || 'Admin';
-
-  const getPermissionsForRole = (role) => {
-    const defaultPermissions = {
-      'Admin': [
-        'view_dashboard', 'view_customers', 'manage_customers', 'view_orders', 'manage_orders', 
-        'view_invoice_status', 'change_invoice_status', 'make_invoice', 'view_invoice_details', 
-        'view_services', 'manage_services', 'view_logistics', 'manage_logistics', 
-        'view_payments', 'manage_payments', 'view_reports', 'manage_staff', 'assign_roles', 
-        'manage_permissions', 'manage_settings', 'full_access', 'create_records', 
-        'edit_records', 'delete_records', 'view_all_data', 'access_all_modules'
-      ]
-    };
-    const saved = localStorage.getItem('spinclean_role_permissions_v3');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed[role]) {
-          const allowed = defaultPermissions[role] || [];
-          return [...new Set([...allowed, ...parsed[role]])];
-        }
-      } catch (e) {
-        console.error("Failed to parse role permissions", e);
-      }
-    }
-    return defaultPermissions[role] || [];
-  };
-
-  const allowedPermissions = getPermissionsForRole(userRole);
 
   let requiredPermission = null;
   if (path.includes('/admin/dashboard')) requiredPermission = 'view_dashboard';
@@ -79,7 +51,7 @@ const AdminLayout = ({ children }) => {
   else if (path.includes('/admin/reports')) requiredPermission = 'view_reports';
   else if (path.includes('/admin/settings')) requiredPermission = 'manage_settings';
 
-  const hasAccess = !requiredPermission || allowedPermissions.includes(requiredPermission);
+  const hasAccess = !requiredPermission || hasUserPermission(storedUser, requiredPermission);
 
   const mainRef = React.useRef(null);
 

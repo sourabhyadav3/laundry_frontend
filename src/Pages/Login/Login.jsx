@@ -1,7 +1,6 @@
 import React from 'react';
 import LoginForm from '../../Components/LoginForm';
 import './Login.css';
-import loginHero from '../../assets/laundry_login_hero.png';
 
 const Login = () => {
   // Generate random sizes and left coordinates for background laundry bubbles
@@ -46,26 +45,34 @@ const Login = () => {
       <div className="login-card-container">
         <div className="login-split-card">
           
-          {/* Left Side: Side Image Panel inside the card */}
-          <div className="card-image-side">
-            <div className="side-image-overlay"></div>
-            <img src={loginHero} alt="Laundry Operations Hero" className="side-bg-image" />
+          {/* Left Side: Interactive Brand Panel inside the card */}
+          <div className="card-image-side brand-showcase-panel">
+            <div className="brand-panel-glow"></div>
+            <div className="brand-mesh-gradient"></div>
             
-            <div className="side-hero-content" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
-              {/* Brand Header */}
-              <div className="side-brand" style={{ flexDirection: 'column', gap: '1.25rem', display: 'flex', alignItems: 'center', margin: 'auto 0' }}>
-                <div className="side-logo-box" style={{ width: '100px', height: '100px', padding: '12px', background: '#fff', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)' }}>
-                  <img src="/logo.png" alt="Tuhama Logo" className="w-full h-full object-contain rounded-xl" />
+            <div className="side-hero-content brand-hero-centered">
+              {/* Top pill badge */}
+              <div className="brand-top-badge">
+                <span className="badge-dot"></span>
+                <span>Smart Laundry Operations</span>
+              </div>
+
+              {/* Centered Large Logo & Brand Information */}
+              <div className="side-brand brand-main-center">
+                <div className="side-logo-box brand-logo-large">
+                  <img src="/logo.png" alt="Tuhama Logo" className="brand-logo-img" />
                 </div>
-                <div className="side-brand-text" style={{ textAlign: 'center' }}>
-                  <h2 className="side-brand-name" style={{ fontSize: '1.75rem', fontWeight: '800', color: '#fff', margin: 0, justifyContent: 'center', display: 'flex' }}>
+                <div className="side-brand-text">
+                  <h2 className="side-brand-name brand-title-large">
                     Tuhama laundry co.
                   </h2>
+                  <p className="side-brand-arabic">شركة تهامة للغسيل</p>
+                
                 </div>
               </div>
 
               {/* Card Footer */}
-              <div className="side-hero-footer" style={{ textAlign: 'center' }}>
+              <div className="side-hero-footer">
                 <p>&copy; {new Date().getFullYear()} Tuhama Operations Inc.</p>
               </div>
             </div>

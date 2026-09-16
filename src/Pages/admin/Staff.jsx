@@ -1,6 +1,6 @@
 import React, { useContext, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { FiSearch, FiPlus, FiEye, FiEdit2, FiTrash2, FiChevronDown, FiKey } from 'react-icons/fi';
+import { FiSearch, FiPlus, FiEye, FiEdit2, FiTrash2, FiChevronDown, FiKey, FiLock } from 'react-icons/fi';
 import { AdminStateContext } from '../../context/AdminStateContext';
 import StatsCard from '../../Components/StatsCard';
 import ReusableTable from '../../Components/ReusableTable';
@@ -193,10 +193,18 @@ const Staff = () => {
           <button className="icon-button-small" onClick={() => handleEditStaff(row)} aria-label="Edit">
             <FiEdit2 size={16} />
           </button>
-          <button className="icon-button-small" onClick={() => handleResetPassword(row)} aria-label="Reset Password">
+          <button className="icon-button-small" onClick={() => handleResetPassword(row)} aria-label="Reset Password" title="Reset Password">
             <FiKey size={16} />
           </button>
-          <button className="icon-button-small text-rose-600" onClick={() => handleDeleteClick(row)} aria-label="Delete">
+          <button 
+            className="icon-button-small text-indigo-500 hover:text-indigo-600" 
+            onClick={() => navigate(`/admin/staff/roles?userId=${row.id || row._id || row.username}`)} 
+            aria-label="User Permissions" 
+            title="Manage Individual Permissions"
+          >
+            <FiLock size={16} />
+          </button>
+          <button className="icon-button-small text-rose-600" onClick={() => handleDeleteClick(row)} aria-label="Delete" title="Delete Staff">
             <FiTrash2 size={16} />
           </button>
         </div>

@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { FiLogOut } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { useLanguage } from '../context/LanguageContext';
+import { hasUserPermission } from '../utils/permissionUtils';
 
 const menuItems = [
   { label: 'Dashboard', icon: <FiHome />, to: '/admin/dashboard', permission: 'view_dashboard' },
@@ -77,37 +78,10 @@ const Sidebar = () => {
 
   const userRole = storedUser.role || 'Admin';
 
-  const getPermissionsForRole = (role) => {
-    const defaultPermissions = {
-      'Admin': [
-        'view_dashboard', 'view_customers', 'manage_customers', 'view_orders', 'manage_orders', 
-        'view_invoice_status', 'change_invoice_status', 'make_invoice', 'view_invoice_details', 
-        'view_services', 'manage_services', 'view_logistics', 'manage_logistics', 
-        'view_payments', 'manage_payments', 'view_reports', 'manage_staff', 'assign_roles', 
-        'manage_permissions', 'manage_settings', 'full_access', 'create_records', 
-        'edit_records', 'delete_records', 'view_all_data', 'access_all_modules'
-      ]
-    };
-    const saved = localStorage.getItem('spinclean_role_permissions_v3');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed[role]) {
-          return parsed[role];
-        }
-      } catch (e) {
-        console.error("Failed to parse role permissions", e);
-      }
-    }
-    return defaultPermissions[role] || [];
-  };
-
-  const allowedPermissions = getPermissionsForRole(userRole);
-
   const hasItemPermission = (item) => {
     if (userRole === 'Super Admin') return true;
     if (!item.permission) return true;
-    return allowedPermissions.includes(item.permission);
+    return hasUserPermission(storedUser, item.permission);
   };
 
   const getTranslatedLabel = (label) => {
