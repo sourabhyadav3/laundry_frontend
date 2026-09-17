@@ -2368,7 +2368,8 @@ const MakeInvoice = () => {
                       addGarment({
                         ...selectedGarmentForSize,
                         name: `${selectedGarmentForSize.name} - ${size.label}`,
-                        price: size.price
+                        price: size.price,
+                        customPrice: size.price
                       }, quickServiceMode);
                       setSelectedGarmentForSize(null);
                     }}

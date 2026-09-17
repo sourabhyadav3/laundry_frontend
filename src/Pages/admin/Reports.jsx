@@ -93,7 +93,8 @@ const REPORT_TYPES = {
   ],
   staff: [
     { id: 'user_sales', label: 'Staff Sales & Customer Acquisition', labelAr: 'مبيعات واكتساب العملاء للموظفين' },
-    { id: 'driver_income', label: 'Drivers Income & Deliveries', labelAr: 'دخل وأداء السائقين' }
+    { id: 'driver_income', label: 'Drivers Income & Deliveries', labelAr: 'دخل وأداء السائقين' },
+    { id: 'workshop_perf', label: 'Workshop Staff Performance', labelAr: 'أداء موظفي الورشة (غسيل وكي وخياطة)' }
   ],
   services: [
     { id: 'service_revenue', label: 'Laundry Service Revenue', labelAr: 'الإيرادات حسب الخدمة' },
@@ -133,6 +134,7 @@ const Reports = () => {
     
     switch (stepReportType) {
       case 'user_sales':
+      case 'workshop_perf':
         return [
           { value: 'All', label: language === 'ar' ? 'جميع الموظفين' : 'All Staff' },
           ...staff.map(s => ({ value: s.name, label: s.name }))
@@ -343,6 +345,15 @@ const Reports = () => {
           { header: language === 'ar' ? 'عمولة الفواتير' : 'Invoice Commission', accessor: 'invoiceComm', format: (val) => formatCurrency(val) },
           { header: language === 'ar' ? 'عمولة الدخل' : 'Income Commission', accessor: 'incomeComm', format: (val) => formatCurrency(val) },
           { header: language === 'ar' ? 'إجمالي العمولة' : 'Total Commission', accessor: 'totalComm', format: (val) => formatCurrency(val) },
+        ];
+        break;
+      case 'workshop_perf':
+        columns = [
+          { header: language === 'ar' ? 'الموظف' : 'Staff Name', accessor: 'name' },
+          { header: language === 'ar' ? 'عدد الغسيل' : 'Washing Count', accessor: 'washedCount' },
+          { header: language === 'ar' ? 'عدد الكي' : 'Ironing Count', accessor: 'ironedCount' },
+          { header: language === 'ar' ? 'عدد الخياطة' : 'Stitching Count', accessor: 'stitchedCount' },
+          { header: language === 'ar' ? 'الإجمالي العام للمهام' : 'Total Tasks', accessor: 'totalCount' },
         ];
         break;
       case 'service_revenue':

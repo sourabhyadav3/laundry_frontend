@@ -25,7 +25,7 @@ const OrderTable = ({ orders, onView, onUpdateStatus, selectedOrderIds, setSelec
     if (!row.itemDetails || row.itemDetails.length === 0) return {};
     const firstItem = row.itemDetails[0];
     const catalogItem = catalog?.find(
-      (g) => g.name.toLowerCase() === firstItem.name.toLowerCase()
+      (g) => g.name?.toLowerCase() === firstItem.name?.toLowerCase() || firstItem.name?.toLowerCase().startsWith(g.name?.toLowerCase())
     );
     if (catalogItem && catalogItem.color) {
       const color = catalogItem.color;
@@ -124,6 +124,36 @@ const OrderTable = ({ orders, onView, onUpdateStatus, selectedOrderIds, setSelec
           );
         }
         return <span className="font-medium text-primary whitespace-nowrap">{serviceName}</span>;
+      }
+    },
+    {
+      header: 'Items',
+      accessor: 'items',
+      cell: (row) => {
+        if (!row.itemDetails || row.itemDetails.length === 0) return <span className="text-secondary font-medium">N/A</span>;
+        return (
+          <div className="flex flex-col gap-1.5 py-1 text-[11px] font-semibold text-primary">
+            {row.itemDetails.map((item, idx) => {
+              const catalogItem = catalog?.find(
+                (g) => g.name?.toLowerCase() === item.name?.toLowerCase() || item.name?.toLowerCase().startsWith(g.name?.toLowerCase())
+              );
+              const color = item.color || catalogItem?.color || '#3b82f6';
+              return (
+                <div key={idx} className="flex items-center gap-1.5">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs border border-white/20"
+                    style={{ backgroundColor: color }}
+                    title={`Color: ${color}`}
+                  />
+                  <span className="text-secondary">{item.name}</span>
+                  <span className="px-1.5 py-0.5 bg-blue-500/10 text-blue-600 rounded text-[9px] font-bold font-mono">
+                    x{item.quantity}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        );
       }
     },
     {

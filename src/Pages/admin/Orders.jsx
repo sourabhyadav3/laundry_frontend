@@ -22,7 +22,7 @@ const emptyOrderForm = {
 };
 
 const Orders = () => {
-  const { orders, customers, services, addOrder, setCustomers, catalog, updateOrderStatus, deleteOrder, selectedBranch, branches, liveUpdateFilter } = useContext(AdminStateContext);
+  const { orders, customers, services, addOrder, setCustomers, catalog, updateOrderStatus, deleteOrder, selectedBranch, branches, liveUpdateFilter, staff } = useContext(AdminStateContext);
   const [searchTerm, setSearchTerm] = useState('');
   const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
   
@@ -45,6 +45,10 @@ const Orders = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState(null);
   const [orderForm, setOrderForm] = useState(emptyOrderForm);
+
+  const [washedBy, setWashedBy] = useState('');
+  const [ironedBy, setIronedBy] = useState('');
+  const [stitchedBy, setStitchedBy] = useState('');
 
   const filteredOrders = useMemo(() => {
     return orders
@@ -123,8 +127,29 @@ const Orders = () => {
       });
   }, [orders, searchTerm, statusFilter, paymentFilter, selectedBranch, liveUpdateFilter]);
 
+  const summaryTotals = useMemo(() => {
+    const activeOrders = filteredOrders.filter(o => {
+      const status = String(o.status || '').toLowerCase();
+      return status !== 'delivered' && status !== 'cancelled' && status !== 'returned' && status !== 'ready';
+    });
+
+    let totalInvoices = activeOrders.length;
+    let totalArticles = 0;
+    activeOrders.forEach(order => {
+      if (Array.isArray(order.itemDetails)) {
+        order.itemDetails.forEach(item => {
+          totalArticles += Number(item.quantity) || 0;
+        });
+      }
+    });
+    return { totalInvoices, totalArticles };
+  }, [filteredOrders]);
+
   const handleViewOrder = (order) => {
     setSelectedOrder(order);
+    setWashedBy(order.workshopTasks?.washedBy || '');
+    setIronedBy(order.workshopTasks?.ironedBy || '');
+    setStitchedBy(order.workshopTasks?.stitchedBy || '');
     setShowModal(true);
   };
 
@@ -208,7 +233,7 @@ const Orders = () => {
       }
       holdComment = holdComment.trim();
     }
-    updateOrderStatus(orderId, newStatus, holdComment);
+    updateOrderStatus(orderId, newStatus, holdComment, { workshopTasks: { washedBy, ironedBy, stitchedBy } });
     toast.success(`Order status updated to ${newStatus}`);
   };
 
@@ -363,7 +388,7 @@ const Orders = () => {
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-20">
       {/* Page Header */}
       <section className="surface-card overflow-hidden border border-border shadow-xl rounded-2xl">
         <div className="dashboard-hero p-8 md:p-10">
@@ -535,22 +560,68 @@ const Orders = () => {
 
             {/* Status & Delivery Update */}
             <div className="border-t border-border pt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <h3 className="mb-2 text-sm font-semibold text-primary">Update Status</h3>
-                <div className="relative w-full">
-                  <select
-                    value={activeOrder.status}
-                    onChange={(e) => handleUpdateStatus(activeOrder.id, e.target.value)}
-                    className="w-full appearance-none rounded-xl border border-border bg-surface py-2.5 px-4 pr-10 text-primary focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
-                  >
-                    {statusOrder.map((status) => (
-                      <option key={status} value={status}>
-                        {status}
-                      </option>
-                    ))}
-                  </select>
-                  <FiChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-secondary" />
+              <div className="space-y-4">
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-primary">Update Status</h3>
+                  <div className="relative w-full">
+                    <select
+                      value={activeOrder.status}
+                      onChange={(e) => handleUpdateStatus(activeOrder.id, e.target.value)}
+                      className="w-full appearance-none rounded-xl border border-border bg-surface py-2.5 px-4 pr-10 text-primary focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
+                    >
+                      {statusOrder.map((status) => (
+                        <option key={status} value={status}>
+                          {status}
+                        </option>
+                      ))}
+                    </select>
+                    <FiChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-secondary" />
+                  </div>
                 </div>
+
+                {['Preparing in workshop', 'Washing', 'Ironing', 'Ready', 'Ready for delivery'].includes(activeOrder.status) && (
+                  <div className="p-3 bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800/30 rounded-xl space-y-3">
+                    <label className="text-xs font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider flex justify-between items-center">
+                      <span>🛠️ Assign Workshop Staff</span>
+                      <button onClick={() => updateOrderStatus(activeOrder.id, activeOrder.status, '', { workshopTasks: { washedBy, ironedBy, stitchedBy } })} className="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded">Save Staff</button>
+                    </label>
+                    <div className="space-y-2">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-semibold text-secondary mb-1">Washed By:</span>
+                        <select
+                          value={washedBy}
+                          onChange={(e) => setWashedBy(e.target.value)}
+                          className="text-sm rounded-lg border-border bg-surface px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        >
+                          <option value="">-- Select Staff --</option>
+                          {staff?.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                        </select>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-semibold text-secondary mb-1">Ironed By:</span>
+                        <select
+                          value={ironedBy}
+                          onChange={(e) => setIronedBy(e.target.value)}
+                          className="text-sm rounded-lg border-border bg-surface px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        >
+                          <option value="">-- Select Staff --</option>
+                          {staff?.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                        </select>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-semibold text-secondary mb-1">Stitched By:</span>
+                        <select
+                          value={stitchedBy}
+                          onChange={(e) => setStitchedBy(e.target.value)}
+                          className="text-sm rounded-lg border-border bg-surface px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        >
+                          <option value="">-- Select Staff --</option>
+                          {staff?.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -769,6 +840,21 @@ const Orders = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Dynamic Summary Bar */}
+      <div className="fixed bottom-6 left-0 lg:left-64 right-0 z-40 flex justify-center pointer-events-none px-4">
+        <div className="pointer-events-auto bg-gradient-to-r from-blue-600 to-indigo-600 shadow-[0_8px_30px_rgba(59,130,246,0.3)] rounded-full px-6 md:px-8 py-3 md:py-3.5 flex items-center gap-4 md:gap-8 border border-white/20">
+          <div className="flex items-center gap-2 md:gap-3">
+            <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-blue-100">Total Invoices</span>
+            <span className="bg-white text-blue-700 font-mono font-black text-lg md:text-xl px-3 md:px-4 py-0.5 md:py-1 rounded-full shadow-sm">{summaryTotals.totalInvoices}</span>
+          </div>
+          <div className="w-px h-6 md:h-8 bg-white/20"></div>
+          <div className="flex items-center gap-2 md:gap-3">
+            <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-blue-100">Total Articles</span>
+            <span className="bg-white text-indigo-700 font-mono font-black text-lg md:text-xl px-3 md:px-4 py-0.5 md:py-1 rounded-full shadow-sm">{summaryTotals.totalArticles}</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

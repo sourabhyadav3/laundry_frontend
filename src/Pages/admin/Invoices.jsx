@@ -323,7 +323,7 @@ const Invoices = () => {
     if (!row.itemDetails || row.itemDetails.length === 0) return {};
     const firstItem = row.itemDetails[0];
     const catalogItem = catalog?.find(
-      (g) => g.name.toLowerCase() === firstItem.name.toLowerCase()
+      (g) => g.name?.toLowerCase() === firstItem.name?.toLowerCase() || firstItem.name?.toLowerCase().startsWith(g.name?.toLowerCase())
     );
     if (catalogItem && catalogItem.color) {
       const color = catalogItem.color;

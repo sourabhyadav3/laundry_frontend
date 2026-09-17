@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { FiMenu, FiX, FiHome, FiUsers, FiFileText, FiTool, FiTruck, FiCreditCard, FiDollarSign, FiUserCheck, FiBarChart2, FiSettings, FiMapPin, FiList, FiPlusCircle } from 'react-icons/fi';
+import { FiMenu, FiX, FiHome, FiUsers, FiFileText, FiTruck, FiCreditCard, FiDollarSign, FiUserCheck, FiBarChart2, FiSettings, FiList, FiPlusCircle } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { FiLogOut } from 'react-icons/fi';
 import { toast } from 'react-toastify';
@@ -12,9 +12,9 @@ const menuItems = [
   { label: 'Customers', icon: <FiUsers />, to: '/admin/customers', permission: 'view_customers' },
   { label: 'Change invoice status', icon: <FiList />, to: '/admin/orders', permission: 'view_orders' },
   { label: 'Invoices', icon: <FiFileText />, to: '/admin/invoices', permission: 'view_invoice_status' },
-  { label: 'Branches', icon: <FiMapPin />, to: '/admin/branches', permission: 'manage_branches' },
+  // { label: 'Branches', icon: <FiMapPin />, to: '/admin/branches', permission: 'manage_branches' },
   { label: 'Make Invoices', icon: <FiPlusCircle />, to: '/admin/make-invoice', permission: 'make_invoice' },
-  { label: 'Laundry Services', icon: <FiTool />, to: '/admin/services', permission: 'view_services' },
+  // { label: 'Laundry Services', icon: <FiTool />, to: '/admin/services', permission: 'view_services' },
   { label: 'Home Service', icon: <FiTruck />, to: '/admin/pickups', permission: 'view_pickups' },
   { label: 'Drivers', icon: <FiUsers />, to: '/admin/drivers', permission: 'view_drivers' },
   { label: 'Payments', icon: <FiCreditCard />, to: '/admin/payments', permission: 'view_payments' },

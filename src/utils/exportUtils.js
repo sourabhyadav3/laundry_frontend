@@ -1289,7 +1289,7 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
             ${(order?.packaging === 'Folded' || order?.packaging === 'Fold') ? `
             <div class="info-row" style="background-color: #f3e8ff; border: 1.5px dashed #7e22ce; padding: 2px 4px; border-radius: 4px; margin: 3px 0; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
               <span class="info-label" style="color: #6b21a8 !important; font-weight: 800;">Packaging / التجهيز:</span>
-              <span class="info-value" style="color: #6b21a8 !important; font-weight: 900;">FOLDED / طي 📦</span>
+              <span class="info-value" style="color: #6b21a8 !important; font-weight: 900;">FOLD / طي 📦</span>
             </div>` : ''}
             <div class="info-row">
               <span class="info-label">Exp. Delivery / التسليم المتوقع:</span>

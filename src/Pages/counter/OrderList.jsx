@@ -9,7 +9,7 @@ import { ORDER_STATUSES, getNextOrderStatus, getOrderStatusStyle, HOLD_STATUS } 
 import OrderTimeline from '../../Components/counter/OrderTimeline';
 
 const OrderList = () => {
-  const { orders, updateOrderStatus, selectedBranch, bulkUpdateOrderStatus, transferOrdersToBranch, branches, language } = useContext(AdminStateContext);
+  const { orders, updateOrderStatus, selectedBranch, bulkUpdateOrderStatus, transferOrdersToBranch, branches, language, staff } = useContext(AdminStateContext);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [paymentFilter, setPaymentFilter] = useState('All');
@@ -53,6 +53,10 @@ const OrderList = () => {
   const [statusDeliveryDate, setStatusDeliveryDate] = useState('');
   const [statusDeliveryTime, setStatusDeliveryTime] = useState('');
   const [deliveryPaymentMethod, setDeliveryPaymentMethod] = useState('');
+
+  const [washedBy, setWashedBy] = useState('');
+  const [ironedBy, setIronedBy] = useState('');
+  const [stitchedBy, setStitchedBy] = useState('');
 
   // Local state for Order Details Delivery section
   const [viewDeliveryMode, setViewDeliveryMode] = useState('branch');
@@ -147,6 +151,11 @@ const OrderList = () => {
     setStatusDeliveryDate(order.deliveryDate ? order.deliveryDate.substring(0, 10) : '');
     setStatusDeliveryTime(order.expectedDeliveryTime || '');
     setDeliveryPaymentMethod(order.paymentMethod || '');
+    
+    setWashedBy(order.workshopTasks?.washedBy || '');
+    setIronedBy(order.workshopTasks?.ironedBy || '');
+    setStitchedBy(order.workshopTasks?.stitchedBy || '');
+
     setShowStatusModal(true);
   };
 
@@ -164,7 +173,12 @@ const OrderList = () => {
         deliveryDate: statusDeliveryType === 'Home Delivery' ? statusDeliveryDate : '',
         expectedDeliveryTime: statusDeliveryTime,
         paymentMethod: (newStatus === 'Delivered' && deliveryPaymentMethod) ? deliveryPaymentMethod : undefined,
-        paymentStatus: (newStatus === 'Delivered' && deliveryPaymentMethod) ? 'Paid' : undefined
+        paymentStatus: (newStatus === 'Delivered' && deliveryPaymentMethod) ? 'Paid' : undefined,
+        workshopTasks: {
+          washedBy,
+          ironedBy,
+          stitchedBy
+        }
       }
     );
     setShowStatusModal(false);
@@ -191,8 +205,26 @@ const OrderList = () => {
     );
   };
 
+  const summaryTotals = useMemo(() => {
+    const activeOrders = filteredOrders.filter(o => {
+      const status = String(o.status || '').toLowerCase();
+      return status !== 'delivered' && status !== 'cancelled' && status !== 'returned' && status !== 'ready';
+    });
+
+    let totalInvoices = activeOrders.length;
+    let totalArticles = 0;
+    activeOrders.forEach(order => {
+      if (Array.isArray(order.itemDetails)) {
+        order.itemDetails.forEach(item => {
+          totalArticles += Number(item.quantity) || 0;
+        });
+      }
+    });
+    return { totalInvoices, totalArticles };
+  }, [filteredOrders]);
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-20">
       <section className="surface-card overflow-hidden border border-border shadow-xl">
         <div className="dashboard-hero p-8 md:p-10">
           <p className="text-sm uppercase tracking-[0.3em] text-secondary">
@@ -746,6 +778,51 @@ const OrderList = () => {
                 </button>
               </div>
             )}
+
+            {/* Workshop Tasks Assignment */}
+            {['Preparing in workshop', 'Washing', 'Ironing', 'Ready', 'Ready for delivery'].includes(newStatus) && (
+              <div className="p-3 bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800/30 rounded-xl space-y-3">
+                <label className="text-xs font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">
+                  🛠️ Assign Workshop Staff
+                </label>
+                <div className="space-y-2">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-semibold text-secondary mb-1">Washed By:</span>
+                    <select
+                      value={washedBy}
+                      onChange={(e) => setWashedBy(e.target.value)}
+                      className="text-sm rounded-lg border-border bg-surface px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">-- Select Staff --</option>
+                      {staff?.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-semibold text-secondary mb-1">Ironed By:</span>
+                    <select
+                      value={ironedBy}
+                      onChange={(e) => setIronedBy(e.target.value)}
+                      className="text-sm rounded-lg border-border bg-surface px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">-- Select Staff --</option>
+                      {staff?.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-semibold text-secondary mb-1">Stitched By:</span>
+                    <select
+                      value={stitchedBy}
+                      onChange={(e) => setStitchedBy(e.target.value)}
+                      className="text-sm rounded-lg border-border bg-surface px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">-- Select Staff --</option>
+                      {staff?.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={() => setNewStatus(getNextOrderStatus(selectedOrder.status))}
@@ -763,8 +840,24 @@ const OrderList = () => {
           </div>
         )}
       </Modal>
+
+      {/* Dynamic Summary Bar */}
+      <div className="fixed bottom-6 left-0 right-0 z-40 flex justify-center pointer-events-none px-4">
+        <div className="pointer-events-auto bg-gradient-to-r from-blue-600 to-indigo-600 shadow-[0_8px_30px_rgba(59,130,246,0.3)] rounded-full px-6 md:px-8 py-3 md:py-3.5 flex items-center gap-4 md:gap-8 border border-white/20">
+          <div className="flex items-center gap-2 md:gap-3">
+            <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-blue-100">Total Invoices</span>
+            <span className="bg-white text-blue-700 font-mono font-black text-lg md:text-xl px-3 md:px-4 py-0.5 md:py-1 rounded-full shadow-sm">{summaryTotals.totalInvoices}</span>
+          </div>
+          <div className="w-px h-6 md:h-8 bg-white/20"></div>
+          <div className="flex items-center gap-2 md:gap-3">
+            <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-blue-100">Total Articles</span>
+            <span className="bg-white text-indigo-700 font-mono font-black text-lg md:text-xl px-3 md:px-4 py-0.5 md:py-1 rounded-full shadow-sm">{summaryTotals.totalArticles}</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
 
 export default OrderList;
+
