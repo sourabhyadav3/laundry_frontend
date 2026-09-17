@@ -183,6 +183,7 @@ function App() {
           <Route index element={<SuperAdminDashboard />} />
           <Route path="dashboard" element={<SuperAdminDashboard />} />
           <Route path="users" element={<SuperAdminUsers />} />
+          <Route path="roles" element={<RolesPermissions />} />
           <Route path="branches" element={<SuperAdminBranches />} />
           <Route path="branches/add" element={<SuperAdminAddBranch />} />
           <Route path="branches/:id/edit" element={<SuperAdminEditBranch />} />

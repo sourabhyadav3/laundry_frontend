@@ -16,7 +16,26 @@ const CATEGORIES = [
   { id: 'custom', label: 'Custom / مخصص' },
 ];
 
-const POPULAR_ICONS = ['👕', '🥋', '👔', '👖', '👗', '🧥', '👘', '👚', '🧕', '👳', '🧣', '🧢', '🧹', '🪟', '🛏️', '👰', '🎖️', '🤵', '🧤', '🧦'];
+const POPULAR_ICONS = [
+  // Tops & Shirts
+  '👕', '👔', '👚', '🥼', '🦺', '🧥', 
+  // Bottoms & Dresses
+  '👖', '🩳', '👗', '👘', '🥻', 
+  // Traditional & Occasional
+  '🥋', '🧕', '👳', '👰', '🤵', '🎖️',
+  // Underwear & Swimwear
+  '🩲', '👙', '🩱',
+  // Accessories & Winter
+  '🧣', '🧤', '🧦', '🧢', '👒', '🎩',
+  // Footwear
+  '👟', '👞', '👢', '👠', '👡', '🥾',
+  // Bags & Luggage
+  '🎒', '👜', '💼', '🧳',
+  // Household & Bedding
+  '🛏️', '🛋️', '🪟', '🧸', '🧶', 
+  // Cleaning & Laundry Tools
+  '🧺', '🧹', '🧻', '🧽', '🧼', '🧴', '🧵', '🪡'
+];
 
 const EMPTY_GARMENT_FORM = {
   name: '',

@@ -83,6 +83,9 @@ const RolesPermissions = () => {
   // Mode: 'roles' (Role Defaults) vs 'users' (User-Based)
   const [activeTab, setActiveTab] = useState(initialUserIdParam ? 'users' : 'roles');
 
+  const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const userRole = storedUser.role || 'Admin';
+
   // State for Roles
   const [roles, setRoles] = useState(() => {
     const saved = localStorage.getItem('spinclean_roles_list_v3');
@@ -300,7 +303,10 @@ const RolesPermissions = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/admin/staff')}
+            onClick={() => {
+              if (userRole === 'Super Admin') navigate('/superadmin/dashboard');
+              else navigate('/admin/staff');
+            }}
             className="rounded-2xl border border-border bg-surface p-2 text-secondary transition hover:text-primary"
           >
             <FiArrowLeft size={20} />
@@ -328,17 +334,19 @@ const RolesPermissions = () => {
           <span>Role Defaults (Global)</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab('users')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold transition ${
-            activeTab === 'users'
-              ? 'bg-indigo-600 text-white shadow-md'
-              : 'bg-surface border border-border text-secondary hover:text-primary'
-          }`}
-        >
-          <FiUser size={16} />
-          <span>Individual User Permissions (Per-User)</span>
-        </button>
+        {userRole === 'Super Admin' && (
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold transition ${
+              activeTab === 'users'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'bg-surface border border-border text-secondary hover:text-primary'
+            }`}
+          >
+            <FiUser size={16} />
+            <span>Individual User Permissions (Per-User)</span>
+          </button>
+        )}
       </div>
 
       {/* TAB 1: Role Defaults Mode */}

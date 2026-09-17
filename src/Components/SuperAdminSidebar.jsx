@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { FiMenu, FiX, FiHome, FiUsers, FiDollarSign, FiBarChart2, FiSettings, FiMapPin, FiTool, FiActivity, FiShoppingBag } from 'react-icons/fi';
+import { FiMenu, FiX, FiHome, FiUsers, FiDollarSign, FiBarChart2, FiSettings, FiMapPin, FiTool, FiActivity, FiShoppingBag, FiUserCheck } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { FiLogOut } from 'react-icons/fi';
 import { toast } from 'react-toastify';
@@ -8,7 +8,8 @@ import { useLanguage } from '../context/LanguageContext';
 
 const menuItems = [
   { label: 'Dashboard',             icon: <FiHome />,    to: '/superadmin/dashboard' },
-  { label: 'User & Role Management', icon: <FiUsers />,   to: '/superadmin/users' },
+  { label: 'User Management',       icon: <FiUsers />,   to: '/superadmin/users' },
+  { label: 'Roles & Permissions',   icon: <FiUserCheck />,to: '/superadmin/roles' },
   { label: 'Branches',              icon: <FiMapPin />,  to: '/superadmin/branches' },
   { label: 'Laundry Services',      icon: <FiTool />,    to: '/superadmin/services' },
   { label: 'Garment / Catalog',     icon: <FiShoppingBag />, to: '/superadmin/garments' },

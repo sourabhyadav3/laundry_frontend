@@ -207,34 +207,11 @@ const LcdDisplay = () => {
     }
   }, [orders]);
 
-  const isOrderFinishedOrReady = (order) => {
-    if (!order) return true;
-    const normStatus = normalizeOrderStatus(order.status || 'Waiting');
-    const statusLower = String(order.status || '').toLowerCase().trim();
-    return (
-      normStatus === 'Ready' ||
-      normStatus === 'Ready for delivery' ||
-      normStatus === 'Ready for shop' ||
-      normStatus === 'Delivered' ||
-      normStatus === 'Store' ||
-      normStatus === 'Return' ||
-      statusLower === 'ready' ||
-      statusLower === 'ready for delivery' ||
-      statusLower === 'ready for shop' ||
-      statusLower === 'delivered' ||
-      statusLower === 'completed' ||
-      statusLower === 'store' ||
-      statusLower === 'return' ||
-      statusLower === 'cancelled'
-    );
-  };
+  // isOrderFinishedOrReady function removed to allow all statuses to be displayed on LCD
 
   const filteredLocalOrders = useMemo(() => {
     return allAvailableOrders.filter(order => {
       if (!order) return false;
-      // Client rule: When ready or complete, remove from LCD screen
-      if (isOrderFinishedOrReady(order)) return false;
-
       if (selectedBranch && selectedBranch !== 'All') {
         const branchObj = branches?.find(b => (b.id || b._id)?.toString() === selectedBranch.toString());
         const branchName = branchObj ? branchObj.name : selectedBranch;
