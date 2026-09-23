@@ -18,6 +18,7 @@ const PickupTable = ({ pickups, onView, onUpdateStatus }) => {
       accessor: 'address',
       cell: (row) => {
         const cust = customers.find((c) => c.name === row.customer);
+        const paci = cust?.paciNo || row.paciNo;
         if (language === 'ar') {
           return (
             <div className="text-xs space-y-0.5 text-right font-medium" dir="rtl">
@@ -28,6 +29,7 @@ const PickupTable = ({ pickups, onView, onUpdateStatus }) => {
               <div><strong>المنزل:</strong> {cust?.houseNo || row.houseNo || '14'}</div>
               <div><strong>الطابق:</strong> {cust?.levelNo || row.levelNo || '3'}</div>
               <div><strong>الشقة:</strong> {cust?.flatNo || row.flatNo || '12'}</div>
+              {paci && <div><strong>الرقم الآلي (PACI):</strong> {paci}</div>}
             </div>
           );
         }
@@ -40,6 +42,7 @@ const PickupTable = ({ pickups, onView, onUpdateStatus }) => {
             <div><strong>House:</strong> {cust?.houseNo || row.houseNo || '14'}</div>
             <div><strong>F:</strong> {cust?.levelNo || row.levelNo || '3'}</div>
             <div><strong>Flat:</strong> {cust?.flatNo || row.flatNo || '12'}</div>
+            {paci && <div><strong>PACI:</strong> {paci}</div>}
           </div>
         );
       }

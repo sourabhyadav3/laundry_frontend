@@ -857,6 +857,7 @@ const PickupDelivery = () => {
         existing.paymentStatus = o.paymentStatus;
         existing.totalAmount = o.totalAmount;
         existing.createdFromInvoice = true;
+        existing.createdAt = existing.createdAt || o.createdAt || o.date;
       } else {
         deliveryMap.set(o.number, {
           id: `del-order-${o.id || o.number}`,
@@ -879,6 +880,7 @@ const PickupDelivery = () => {
           orderStatus: o.status,
           paymentStatus: o.paymentStatus,
           totalAmount: o.totalAmount,
+          createdAt: o.createdAt || o.date,
         });
       }
     });
@@ -928,9 +930,29 @@ const PickupDelivery = () => {
 
       return matchesBranch && matchesCustomer && matchesSearch;
     }).sort((a, b) => {
-      if (a.createdAt && b.createdAt) {
-        return new Date(b.createdAt) - new Date(a.createdAt);
+      // 1. Sort by createdAt timestamp if available
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (timeA && timeB && timeA !== timeB) {
+        return timeB - timeA;
       }
+      if (timeB && !timeA) return 1;
+      if (timeA && !timeB) return -1;
+
+      // 2. Sort by orderDate if createdAt is identical or missing
+      if (a.orderDate && b.orderDate && a.orderDate !== b.orderDate) {
+        const dA = new Date(a.orderDate).getTime();
+        const dB = new Date(b.orderDate).getTime();
+        if (!isNaN(dA) && !isNaN(dB) && dA !== dB) return dB - dA;
+      }
+
+      // 3. Fallback: extract numeric suffix from orderNumber or deliveryId (e.g. MIS-079 vs MIS-026)
+      const numA = parseInt(String(a.orderNumber || a.deliveryId || '').replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt(String(b.orderNumber || b.deliveryId || '').replace(/\D/g, ''), 10) || 0;
+      if (numA !== numB) {
+        return numB - numA;
+      }
+
       return String(b.deliveryId || '').localeCompare(String(a.deliveryId || ''), undefined, { numeric: true, sensitivity: 'base' });
     });
   }, [allHomeDeliveries, searchTerm, selectedCustomerObj, selectedBranch, branches]);
@@ -1353,7 +1375,7 @@ const PickupDelivery = () => {
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 text-sm">
                   <div>
                     <p className="text-[10px] uppercase tracking-wider text-secondary">Customer ID</p>
-                    <p className="font-semibold text-primary">CUS-{String(selectedCustomerObj.id).padStart(4, '0')}</p>
+                    <p className="font-semibold text-primary">{selectedCustomerObj.customerNo && selectedCustomerObj.customerNo !== 'Auto-generated' ? (String(selectedCustomerObj.customerNo).startsWith('CUS-') ? selectedCustomerObj.customerNo : `CUS-${selectedCustomerObj.customerNo}`) : (selectedCustomerObj.displayId ? `CUS-${selectedCustomerObj.displayId}` : `CUS-${String(selectedCustomerObj.id).padStart(4, '0')}`)}</p>
                   </div>
                   <div>
                     <p className="text-[10px] uppercase tracking-wider text-secondary">Phone</p>
@@ -1847,11 +1869,12 @@ const PickupDelivery = () => {
       {showEditDeliveryModal && editDeliveryData && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              updateDeliveryJob(editDeliveryData);
-              toast.success(`Delivery ID ${editDeliveryData.deliveryId} updated successfully`);
-              setShowEditDeliveryModal(false);
+              const ok = await updateDeliveryJob(editDeliveryData);
+              if (ok) {
+                setShowEditDeliveryModal(false);
+              }
             }}
             className="surface-card max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-border p-8 shadow-2xl"
           >

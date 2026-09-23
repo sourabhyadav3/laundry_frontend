@@ -414,7 +414,15 @@ const Invoices = () => {
       accessor: 'paymentStatus',
       cell: (row) => <span className={`status-pill border ${paymentStatusStyles[row.paymentStatus] || paymentStatusStyles.Pending}`}>{row.paymentStatus}</span>,
     },
-    { header: 'Amount', accessor: 'totalAmount', format: (val) => formatCurrency(val) },
+    {
+      header: 'Amount',
+      accessor: 'totalAmount',
+      cell: (row) => (
+        <span className="font-extrabold text-[15px] font-mono text-primary" style={{ fontWeight: 800, fontSize: '15px' }}>
+          {formatCurrency(row.totalAmount)}
+        </span>
+      ),
+    },
     { header: 'Date', accessor: 'date', format: (val) => formatDate(val) },
     {
       header: 'Actions',
@@ -510,7 +518,7 @@ const Invoices = () => {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-1">
           <h2 className="text-xl font-semibold text-primary">Invoices List</h2>
-          <p className="text-sm text-secondary">Total: {filteredOrders.length} invoices | Total Value: {formatCurrency(filteredOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0))}</p>
+          <p className="text-sm text-secondary">Total: {filteredOrders.length} invoices</p>
         </div>
         <button
           onClick={() => exportToCSV(filteredOrders, 'invoices.csv')}
@@ -747,7 +755,7 @@ const Invoices = () => {
                       <th className="p-3 font-semibold text-secondary">Item Name</th>
                       <th className="p-3 font-semibold text-secondary w-24">Qty</th>
                       <th className="p-3 font-semibold text-secondary w-32">Unit Price</th>
-                      <th className="p-3 font-semibold text-secondary w-32">Total</th>
+                      <th className="p-3 font-bold text-secondary w-32">Total</th>
                       <th className="p-3 w-16"></th>
                     </tr>
                   </thead>
@@ -782,7 +790,7 @@ const Invoices = () => {
                             className="w-full bg-transparent border-b border-border focus:border-blue-500 focus:outline-none py-1"
                           />
                         </td>
-                        <td className="p-3 font-mono text-primary">
+                        <td className="p-3 font-mono font-bold text-primary">
                           {formatCurrency(Number(item.quantity || 0) * Number(item.unitPrice || 0))}
                         </td>
                         <td className="p-3 text-center">

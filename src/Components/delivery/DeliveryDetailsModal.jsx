@@ -57,6 +57,7 @@ const DeliveryDetailsModal = ({ isOpen, onClose, job, type, onUpdateStatus }) =>
                     <div><strong>المنزل:</strong> {job.houseNo || '14'}</div>
                     <div><strong>الطابق:</strong> {job.levelNo || '3'}</div>
                     <div><strong>الشقة:</strong> {job.flatNo || '12'}</div>
+                    {job.paciNo && <div><strong>الرقم الآلي (PACI):</strong> {job.paciNo}</div>}
                   </div>
                 ) : (
                   <div className="mt-1 text-sm text-left font-semibold text-primary space-y-0.5 animate-fadeIn" dir="ltr">
@@ -67,10 +68,14 @@ const DeliveryDetailsModal = ({ isOpen, onClose, job, type, onUpdateStatus }) =>
                     <div><strong>House:</strong> {job.houseNo || '14'}</div>
                     <div><strong>F:</strong> {job.levelNo || '3'}</div>
                     <div><strong>Flat:</strong> {job.flatNo || '12'}</div>
+                    {job.paciNo && <div><strong>PACI:</strong> {job.paciNo}</div>}
                   </div>
                 )
               ) : (
-                <p className="mt-1 font-semibold text-primary">{job.address}</p>
+                <div className="mt-1 font-semibold text-primary space-y-0.5">
+                  <p>{job.address}</p>
+                  {job.paciNo && <p className="text-xs text-secondary"><strong>PACI:</strong> {job.paciNo}</p>}
+                </div>
               )}
             </div>
           </div>

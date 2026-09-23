@@ -57,7 +57,7 @@ const CARD_COLORS_DARK = [
 const DEFAULT_AREAS = CUSTOMER_AREAS;
 
 const MakeInvoice = () => {
-    const { customers, orders, addOrder, setCustomers, updateCustomer, catalog, setCatalog, selectedBranch, payments, setPayments, services, addCatalogItem, updateCatalogItem, deleteCatalogItem, addCustomer } = useContext(AdminStateContext);
+    const { customers, orders, addOrder, setCustomers, updateCustomer, catalog, setCatalog, selectedBranch, payments, setPayments, services, addCatalogItem, updateCatalogItem, deleteCatalogItem, addCustomer, areas } = useContext(AdminStateContext);
     const navigate = useNavigate();
     const { language, t, tr } = useLanguage();
     const { theme } = useTheme();
@@ -159,6 +159,126 @@ const MakeInvoice = () => {
     // Inactive Customer Alert Modal state
     const [showInactiveModal, setShowInactiveModal] = useState(false);
     const [inactiveCustomerData, setInactiveCustomerData] = useState(null);
+
+    // Address Modal State for Home Delivery
+    const [showCustomerAddressModal, setShowCustomerAddressModal] = useState(false);
+    const [customerAddressForm, setCustomerAddressForm] = useState({
+        areaName: '',
+        partNo: '',
+        street: '',
+        jadda: '',
+        houseNo: '',
+        flatNo: '',
+        levelNo: '',
+        paciNo: '',
+        addressNotes: '',
+    });
+    const [isSavingCustomerAddress, setIsSavingCustomerAddress] = useState(false);
+
+    const customerHasAddress = (cust) => {
+        if (!cust) return false;
+        return Boolean(
+            (cust.areaName && String(cust.areaName).trim()) ||
+            (cust.street && String(cust.street).trim()) ||
+            (cust.houseNo && String(cust.houseNo).trim()) ||
+            (cust.partNo && String(cust.partNo).trim()) ||
+            (cust.flatNo && String(cust.flatNo).trim()) ||
+            (cust.jadda && String(cust.jadda).trim()) ||
+            (cust.levelNo && String(cust.levelNo).trim()) ||
+            (cust.paciNo && String(cust.paciNo).trim()) ||
+            (cust.address && String(cust.address).trim()) ||
+            (cust.addressNotes && String(cust.addressNotes).trim())
+        );
+    };
+
+    const handleOpenCustomerAddressModal = (cust) => {
+        const target = cust || selectedCustomerObj;
+        if (!target) {
+            toast.warning(language === 'ar' ? 'يرجى اختيار العميل أولاً لتحديد عنوان التوصيل' : 'Please select a customer first to set delivery address');
+            return;
+        }
+        setCustomerAddressForm({
+            areaName: target.areaName || '',
+            partNo: target.partNo || '',
+            street: target.street || '',
+            jadda: target.jadda || '',
+            houseNo: target.houseNo || '',
+            flatNo: target.flatNo || '',
+            levelNo: target.levelNo || '',
+            paciNo: target.paciNo || '',
+            addressNotes: target.addressNotes || '',
+        });
+        setShowCustomerAddressModal(true);
+    };
+
+    const handleCloseCustomerAddressModal = () => {
+        setShowCustomerAddressModal(false);
+        if (!customerHasAddress(selectedCustomerObj)) {
+            setForm((prev) => ({ ...prev, deliveryMode: 'branch' }));
+        }
+    };
+
+    const handleSaveCustomerAddress = async (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        const target = selectedCustomerObj;
+        if (!target) return;
+
+        const hasAnyAddressValue = Boolean(
+            customerAddressForm.areaName?.trim() ||
+            customerAddressForm.street?.trim() ||
+            customerAddressForm.houseNo?.trim() ||
+            customerAddressForm.partNo?.trim() ||
+            customerAddressForm.addressNotes?.trim() ||
+            customerAddressForm.paciNo?.trim()
+        );
+
+        if (!hasAnyAddressValue) {
+            toast.error(language === 'ar' ? 'يرجى إدخال المنطقة أو الشارع أو رقم المنزل' : 'Please enter at least Area Name, Street, or House Number');
+            return;
+        }
+
+        setIsSavingCustomerAddress(true);
+        try {
+            const updated = {
+                ...target,
+                areaName: customerAddressForm.areaName?.trim() || '',
+                partNo: customerAddressForm.partNo?.trim() || '',
+                street: customerAddressForm.street?.trim() || '',
+                jadda: customerAddressForm.jadda?.trim() || '',
+                houseNo: customerAddressForm.houseNo?.trim() || '',
+                flatNo: customerAddressForm.flatNo?.trim() || '',
+                levelNo: customerAddressForm.levelNo?.trim() || '',
+                paciNo: customerAddressForm.paciNo?.trim() || '',
+                addressNotes: customerAddressForm.addressNotes?.trim() || '',
+            };
+
+            const ok = await updateCustomer(target.id || target._id, updated);
+            if (ok) {
+                setForm((prev) => ({ ...prev, deliveryMode: 'home' }));
+                setShowCustomerAddressModal(false);
+                toast.success(language === 'ar' ? 'تم حفظ عنوان العميل وتحديد التوصيل المنزلي' : 'Customer address saved & Home Delivery selected');
+            }
+        } catch (err) {
+            toast.error(language === 'ar' ? 'فشل في حفظ العنوان' : 'Failed to save address');
+        } finally {
+            setIsSavingCustomerAddress(false);
+        }
+    };
+
+    const handleSelectHomeDelivery = () => {
+        if (!form.customerId || !selectedCustomerObj) {
+            toast.warning(language === 'ar' ? 'يرجى اختيار العميل أولاً لتحديد عنوان التوصيل' : 'Please select a customer first to set delivery address');
+            return;
+        }
+
+        if (!customerHasAddress(selectedCustomerObj)) {
+            toast.info(language === 'ar' ? 'العميل ليس لديه عنوان مسجل، يرجى إدخال العنوان أولاً' : 'Customer has no saved address. Please enter address first.');
+            handleOpenCustomerAddressModal(selectedCustomerObj);
+            return;
+        }
+
+        setForm((prev) => ({ ...prev, deliveryMode: 'home' }));
+    };
 
     const handleReactivateCustomer = async () => {
         if (!inactiveCustomerData) return;
@@ -618,13 +738,18 @@ const MakeInvoice = () => {
         const isCustomDiscount = cust.customerLevel === 'Custom Discount';
         const discountVal = isCustomDiscount ? Number(cust.customDiscountRate || 0) : Number(cust.customerLevel || 0);
         const hasDiscount = discountVal > 0;
+        const newDeliveryMode = (form.deliveryMode === 'home' && !customerHasAddress(cust)) ? 'branch' : form.deliveryMode;
+        if (form.deliveryMode === 'home' && !customerHasAddress(cust)) {
+            toast.info(language === 'ar' ? 'تم التبديل إلى استلام من الفرع لعدم وجود عنوان مسجل للعميل' : 'Switched to Branch Pickup because customer has no saved address');
+        }
         setForm((prev) => ({
             ...prev,
             customerId: cust.id,
             phoneSearch: cust.phone,
             discountChecked: hasDiscount ? true : false,
             discountPercent: hasDiscount ? discountVal : 0,
-            discountValue: 0
+            discountValue: 0,
+            deliveryMode: newDeliveryMode,
         }));
         setCustomerSearchQuery('');
         setShowSearchResults(false);
@@ -877,6 +1002,11 @@ const MakeInvoice = () => {
             setInactiveCustomerData(customerObj);
             setShowInactiveModal(true);
             toast.error(language === 'ar' ? `حساب العميل موقوف: ${customerObj.inactiveReason || ''}` : `Customer account is inactive: ${customerObj.inactiveReason || ''}`);
+            return false;
+        }
+        if (form.deliveryMode === 'home' && !customerHasAddress(customerObj)) {
+            toast.error(language === 'ar' ? 'يرجى حفظ عنوان العميل أولاً لإتمام التوصيل المنزلي' : 'Please save customer address to complete Home Delivery');
+            handleOpenCustomerAddressModal(customerObj);
             return false;
         }
         if (orderItems.length === 0) { toast.error(language === 'ar' ? 'يرجى إضافة قطعة واحدة على الأقل' : 'Add at least one garment'); return false; }
@@ -2271,19 +2401,16 @@ const MakeInvoice = () => {
 
                     {/* Delivery Method & Time Clock Card — shown after item selection */}
                     {orderItems.length > 0 && (
-                        <div className="mb-3 p-2.5 bg-surface-alt/10 border border-border/50 rounded-xl flex flex-col gap-2 shrink-0 shadow-sm">
-                            {/* Delivery Mode Tabs */}
+                        <div className="mb-2 p-1.5 bg-surface-alt/25 border border-border/60 rounded-xl flex flex-col gap-1 shrink-0">
+                            {/* Row 1: Delivery Mode + Packaging Fold Button */}
                             <div className="flex items-center justify-between gap-2">
-                                <label className="text-[10px] font-bold text-secondary uppercase tracking-wider">
-                                    {t('counter.makeInvoice.deliveryType') || "Delivery Type"}
-                                </label>
-                                <div className="flex bg-surface-alt p-0.5 rounded-lg border border-border/60">
+                                <div className="flex items-center gap-1 bg-surface-alt p-0.5 rounded-lg border border-border/60">
                                     <button
                                         type="button"
                                         onClick={() => setForm((prev) => ({ ...prev, deliveryMode: 'branch' }))}
-                                        className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all ${
+                                        className={`px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all ${
                                             form.deliveryMode === 'branch'
-                                                ? 'bg-blue-600 text-white shadow-sm'
+                                                ? 'bg-blue-600 text-white shadow-sm font-bold'
                                                 : 'text-secondary hover:text-primary'
                                         }`}
                                     >
@@ -2291,90 +2418,68 @@ const MakeInvoice = () => {
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => setForm((prev) => ({ ...prev, deliveryMode: 'home' }))}
-                                        className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all ${
+                                        onClick={handleSelectHomeDelivery}
+                                        className={`px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all ${
                                             form.deliveryMode === 'home'
-                                                ? 'bg-blue-600 text-white shadow-sm'
+                                                ? 'bg-blue-600 text-white shadow-sm font-bold'
                                                 : 'text-secondary hover:text-primary'
                                         }`}
                                     >
                                         🏠 {t('counter.makeInvoice.homeDelivery') || "Home Delivery"}
                                     </button>
                                 </div>
-                            </div>
 
-                            {/* Packaging Mode: Only Fold Button */}
-                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/35">
-                                <label className="text-[10px] font-bold text-secondary uppercase tracking-wider">
-                                    {language === 'ar' ? 'طريقة التجهيز' : 'Packaging'}
-                                </label>
-                                <div>
+                                {form.deliveryMode === 'home' && selectedCustomerObj && customerHasAddress(selectedCustomerObj) && (
                                     <button
                                         type="button"
-                                        onClick={() => setForm((prev) => ({ ...prev, packaging: prev.packaging === 'Folded' ? 'Normal' : 'Folded' }))}
-                                        className={`px-3 py-1 text-[11px] font-semibold rounded-lg border transition-all ${
-                                            form.packaging === 'Folded'
-                                                ? 'bg-purple-600 border-purple-700 text-white shadow-sm font-bold scale-105'
-                                                : 'bg-surface border-border text-secondary hover:text-primary hover:border-slate-400'
-                                        }`}
+                                        onClick={() => handleOpenCustomerAddressModal(selectedCustomerObj)}
+                                        className="text-[9px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 truncate max-w-[130px] font-medium"
+                                        title={language === 'ar' ? 'تعديل عنوان التوصيل' : 'Edit Delivery Address'}
                                     >
-                                        📦 {language === 'ar' ? 'طي (Fold)' : 'Fold'}
+                                        📍 <span className="truncate">{selectedCustomerObj.areaName || selectedCustomerObj.street || 'Address'}</span> ✏️
                                     </button>
-                                </div>
+                                )}
+
+                                <button
+                                    type="button"
+                                    onClick={() => setForm((prev) => ({ ...prev, packaging: prev.packaging === 'Folded' ? 'Normal' : 'Folded' }))}
+                                    className={`px-2.5 py-0.5 text-[10px] font-semibold rounded-lg border transition-all ${
+                                        form.packaging === 'Folded'
+                                            ? 'bg-purple-600 border-purple-700 text-white shadow-sm font-bold'
+                                            : 'bg-surface border-border text-secondary hover:text-primary hover:border-slate-400'
+                                    }`}
+                                    title={language === 'ar' ? 'طريقة التجهيز: طي' : 'Packaging: Fold'}
+                                >
+                                    📦 {language === 'ar' ? 'طي' : 'Fold'} {form.packaging === 'Folded' ? '✓' : ''}
+                                </button>
                             </div>
 
-                            {/* Folded Invoice View Indicator */}
-                            {form.packaging === 'Folded' && (
-                                <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-purple-500/15 border border-purple-400/40 text-purple-700 dark:text-purple-300 text-[11px] font-bold">
-                                    <span className="flex items-center gap-1.5">
-                                        <span>📦</span>
-                                        <span>{language === 'ar' ? 'فاتورة بطريقة الطي (Folded View)' : 'Folded Invoice (Packaging: Fold)'}</span>
-                                    </span>
-                                    <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-purple-600 text-white font-extrabold">
-                                        FOLDED
-                                    </span>
-                                </div>
-                            )}
-
-                            {/* Date & Time Edit Controls */}
-                            <div className="flex flex-col gap-2 pt-2 border-t border-border/35">
-                                <div className={`grid ${form.deliveryMode === 'home' ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
-                                    {form.deliveryMode === 'home' && (
-                                        <div className="flex flex-col gap-1">
-                                            <label className="text-[10px] font-bold text-secondary uppercase tracking-wider">
-                                                📅 {language === 'ar' ? 'تاريخ التجهيز المتوقع' : 'Expected Ready Date'}
-                                            </label>
-                                            <input
-                                                type="date"
-                                                value={form.expectedDeliveryDate || ''}
-                                                onChange={(e) => setForm((prev) => ({ ...prev, expectedDeliveryDate: e.target.value }))}
-                                                className="text-[11px] font-semibold px-2 py-1 rounded-lg border border-border bg-surface text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 h-8"
-                                            />
-                                        </div>
-                                    )}
-                                    <div className="flex flex-col gap-1">
-                                        <label className="text-[10px] font-bold text-secondary uppercase tracking-wider">
-                                            ⏰ {language === 'ar' ? 'وقت التجهيز / المدة' : 'Ready In / Delivery Time'}
-                                        </label>
-                                        <input
-                                            type="text"
-                                            placeholder={language === 'ar' ? 'مثال: 1 Hour' : 'e.g. 1 Hour, 2 Hours'}
-                                            value={form.expectedDeliveryTime || ''}
-                                            onChange={(e) => setForm((prev) => ({ ...prev, expectedDeliveryTime: e.target.value }))}
-                                            className="text-[11px] font-semibold px-2 py-1 rounded-lg border border-border bg-surface text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 h-8 text-center"
-                                        />
-                                    </div>
-                                </div>
+                            {/* Row 2: Date (if home) + Ready In input + Quick time pills */}
+                            <div className="flex items-center gap-1.5 pt-1 border-t border-border/30">
+                                {form.deliveryMode === 'home' && (
+                                    <input
+                                        type="date"
+                                        title={language === 'ar' ? 'تاريخ التجهيز المتوقع' : 'Expected Ready Date'}
+                                        value={form.expectedDeliveryDate || ''}
+                                        onChange={(e) => setForm((prev) => ({ ...prev, expectedDeliveryDate: e.target.value }))}
+                                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded-lg border border-border bg-surface text-primary focus:outline-none focus:ring-1 focus:ring-blue-500 h-6.5 shrink-0"
+                                    />
+                                )}
+                                <input
+                                    type="text"
+                                    placeholder={language === 'ar' ? 'وقت التجهيز' : 'Ready In...'}
+                                    title={language === 'ar' ? 'وقت التجهيز / المدة' : 'Ready In / Delivery Time'}
+                                    value={form.expectedDeliveryTime || ''}
+                                    onChange={(e) => setForm((prev) => ({ ...prev, expectedDeliveryTime: e.target.value }))}
+                                    className="w-24 text-[10px] font-semibold px-1.5 py-0.5 rounded-lg border border-border bg-surface text-primary focus:outline-none focus:ring-1 focus:ring-blue-500 h-6.5 text-center shrink-0"
+                                />
 
                                 {/* Preset Quick Time Pills */}
-                                <div className="flex items-center gap-1 overflow-x-auto pt-1 pb-0.5 no-scrollbar" style={{ msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
-                                    <span className="text-[9px] font-bold text-secondary uppercase shrink-0">
-                                        ⚡ {language === 'ar' ? 'وقت سريع:' : 'Quick Time:'}
-                                    </span>
+                                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 py-0.5" style={{ msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
                                     <button
                                         type="button"
                                         onClick={() => setForm((prev) => ({ ...prev, expectedDeliveryTime: '' }))}
-                                        className={`px-2 py-0.5 text-[10px] font-medium rounded-md border transition-all ${
+                                        className={`px-1.5 py-0.5 text-[9px] font-medium rounded border shrink-0 transition-all ${
                                             !form.expectedDeliveryTime
                                                 ? 'bg-blue-500/15 border-blue-500 text-blue-600 font-bold'
                                                 : 'bg-surface border-border text-secondary hover:text-primary'
@@ -2383,20 +2488,21 @@ const MakeInvoice = () => {
                                         {language === 'ar' ? 'افتراضي' : 'Default'}
                                     </button>
                                     {[
-                                        { label: language === 'ar' ? 'بعد 1 ساعة' : 'After 1 Hour', value: language === 'ar' ? 'بعد 1 ساعة' : 'After 1 Hour' },
-                                        { label: language === 'ar' ? 'بعد 2 ساعة' : 'After 2 Hours', value: language === 'ar' ? 'بعد 2 ساعة' : 'After 2 Hours' },
-                                        { label: language === 'ar' ? 'بعد 3 ساعات' : 'After 3 Hours', value: language === 'ar' ? 'بعد 3 ساعات' : 'After 3 Hours' },
-                                        { label: language === 'ar' ? 'بعد 4 ساعات' : 'After 4 Hours', value: language === 'ar' ? 'بعد 4 ساعات' : 'After 4 Hours' },
-                                        { label: language === 'ar' ? 'بعد 6 ساعات' : 'After 6 Hours', value: language === 'ar' ? 'بعد 6 ساعات' : 'After 6 Hours' },
-                                        { label: language === 'ar' ? 'بعد 12 ساعة' : 'After 12 Hours', value: language === 'ar' ? 'بعد 12 ساعة' : 'After 12 Hours' },
-                                        { label: language === 'ar' ? 'بعد 24 ساعة' : 'After 24 Hours', value: language === 'ar' ? 'بعد 24 ساعة' : 'After 24 Hours' },
+                                        { label: '1h', full: language === 'ar' ? 'بعد 1 ساعة' : 'After 1 Hour' },
+                                        { label: '2h', full: language === 'ar' ? 'بعد 2 ساعة' : 'After 2 Hours' },
+                                        { label: '3h', full: language === 'ar' ? 'بعد 3 ساعات' : 'After 3 Hours' },
+                                        { label: '4h', full: language === 'ar' ? 'بعد 4 ساعات' : 'After 4 Hours' },
+                                        { label: '6h', full: language === 'ar' ? 'بعد 6 ساعات' : 'After 6 Hours' },
+                                        { label: '12h', full: language === 'ar' ? 'بعد 12 ساعة' : 'After 12 Hours' },
+                                        { label: '24h', full: language === 'ar' ? 'بعد 24 ساعة' : 'After 24 Hours' },
                                     ].map((preset) => (
                                         <button
-                                            key={preset.value}
+                                            key={preset.full}
                                             type="button"
-                                            onClick={() => setForm((prev) => ({ ...prev, expectedDeliveryTime: preset.value }))}
-                                            className={`px-2 py-0.5 text-[10px] font-medium rounded-md border shrink-0 transition-all ${
-                                                form.expectedDeliveryTime === preset.value || form.expectedDeliveryTime === preset.value.replace(/^After\s+/, '')
+                                            title={preset.full}
+                                            onClick={() => setForm((prev) => ({ ...prev, expectedDeliveryTime: preset.full }))}
+                                            className={`px-1.5 py-0.5 text-[9px] font-medium rounded border shrink-0 transition-all ${
+                                                form.expectedDeliveryTime === preset.full || form.expectedDeliveryTime === preset.full.replace(/^After\s+/, '')
                                                     ? 'bg-blue-600 text-white border-blue-600 font-bold shadow-xs'
                                                     : 'bg-surface border-border text-secondary hover:text-primary hover:border-blue-500 hover:text-blue-500'
                                             }`}
@@ -2410,7 +2516,7 @@ const MakeInvoice = () => {
                     )}
 
                     {/* Table Container - Scrollable */}
-                    <div className="flex-1 overflow-y-auto min-h-0 mb-3 border border-border/40 rounded-xl bg-surface-alt/20">
+                    <div className="flex-1 overflow-y-auto min-h-0 mb-2 border border-border/40 rounded-xl bg-surface-alt/20">
                         {orderItems.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center p-8 text-center">
                                 <span className="text-3xl mb-2">🧺</span>
@@ -2421,16 +2527,16 @@ const MakeInvoice = () => {
                             <table className="w-full text-left border-collapse text-xs">
                                 <thead>
                                     <tr className="bg-surface-alt/75 text-secondary border-b border-border/80 font-bold">
-                                        <th className="p-2 w-6/12">{t('counter.makeInvoice.itemServiceHeader') || "Item / Service"}</th>
-                                        <th className="p-2 w-2/12 text-center">{t('counter.makeInvoice.qtyHeader') || "Qty"}</th>
-                                        <th className="p-2 w-3/12 text-right">{t('counter.makeInvoice.totalHeader') || "Total"}</th>
-                                        <th className="p-2 w-1/12 text-center"></th>
+                                        <th className="px-2 py-1.5 w-6/12">{t('counter.makeInvoice.itemServiceHeader') || "Item / Service"}</th>
+                                        <th className="px-2 py-1.5 w-2/12 text-center">{t('counter.makeInvoice.qtyHeader') || "Qty"}</th>
+                                        <th className="px-2 py-1.5 w-3/12 text-right">{t('counter.makeInvoice.totalHeader') || "Total"}</th>
+                                        <th className="px-2 py-1.5 w-1/12 text-center"></th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {orderItems.map((item, idx) => (
                                         <tr key={item.id || `${item.name}-${idx}`} className="border-b border-border/30 hover:bg-surface-alt/30 transition-colors">
-                                            <td className="p-2">
+                                            <td className="px-2 py-1.5">
                                                 <div className="font-semibold text-primary break-words leading-tight">{getTranslatedItemName(item.name)}</div>
                                                 <div className="text-[9px] text-secondary font-semibold italic">{getTranslatedServiceMode(item.service)}</div>
                                                 <input
@@ -2438,10 +2544,10 @@ const MakeInvoice = () => {
                                                     placeholder={t('counter.makeInvoice.addNotesPlaceholder') || "Add notes..."}
                                                     value={item.notes}
                                                     onChange={(e) => updateItemNotes(idx, e.target.value)}
-                                                    className="w-full mt-1 bg-surface border border-border/50 rounded px-1.5 py-0.5 text-[9px] focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                                    className="w-full mt-0.5 bg-surface border border-border/50 rounded px-1.5 py-0.5 text-[9px] focus:outline-none focus:ring-1 focus:ring-blue-400"
                                                 />
                                             </td>
-                                            <td className="p-2 text-center">
+                                            <td className="px-2 py-1.5 text-center">
                                                 <div className="inline-flex items-center justify-center bg-surface border border-border/60 rounded-lg overflow-hidden">
                                                     <button
                                                         type="button"
@@ -3734,6 +3840,200 @@ const MakeInvoice = () => {
                                 {language === 'ar' ? 'تفعيل العميل والمتابعة' : 'Reactivate & Continue'}
                             </button>
                         </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Customer Address Modal for Home Delivery */}
+            {showCustomerAddressModal && selectedCustomerObj && createPortal(
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+                    <div className="relative w-full max-w-lg surface-card rounded-3xl border border-blue-500/30 p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-150">
+                        {/* Header */}
+                        <div className="flex items-center justify-between pb-3 border-b border-border/60">
+                            <div className="flex items-center gap-3">
+                                <div className="w-11 h-11 rounded-2xl bg-blue-500/15 text-blue-600 flex items-center justify-center text-2xl font-bold">
+                                    📍
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-bold text-primary">
+                                        {language === 'ar' ? 'عنوان العميل (للتوصيل المنزلي)' : 'Customer Delivery Address'}
+                                    </h3>
+                                    <p className="text-xs text-secondary">
+                                        {language === 'ar' ? 'يرجى حفظ بيانات العنوان لإتمام التوصيل المنزلي' : 'Save address details to enable home delivery'}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleCloseCustomerAddressModal}
+                                className="text-secondary hover:text-primary p-1.5 rounded-xl hover:bg-surface-alt transition"
+                            >
+                                <FiX size={18} />
+                            </button>
+                        </div>
+
+                        {/* Customer Info Pill */}
+                        <div className="p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2">
+                                <span className="font-semibold text-secondary">{language === 'ar' ? 'العميل:' : 'Customer:'}</span>
+                                <span className="font-bold text-primary">{selectedCustomerObj.name || selectedCustomerObj.englishName}</span>
+                            </div>
+                            <div className="font-mono font-bold text-blue-600 dark:text-blue-400">
+                                📞 {selectedCustomerObj.phone}
+                            </div>
+                        </div>
+
+                        {/* Address Form */}
+                        <form onSubmit={handleSaveCustomerAddress} className="space-y-3">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                                <div className="col-span-2 sm:col-span-1">
+                                    <label className="block text-[10px] font-bold text-secondary uppercase mb-1">
+                                        {language === 'ar' ? 'المنطقة *' : 'Area Name *'}
+                                    </label>
+                                    <select
+                                        value={customerAddressForm.areaName || ''}
+                                        onChange={(e) => setCustomerAddressForm(prev => ({ ...prev, areaName: e.target.value }))}
+                                        className="w-full rounded-xl border border-border bg-surface px-2.5 py-2 text-primary text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        required
+                                    >
+                                        <option value="">{language === 'ar' ? 'اختر المنطقة' : 'Select Area'}</option>
+                                        {(areas && areas.length > 0 ? areas : DEFAULT_AREAS).map((area) => (
+                                            <option key={area} value={area}>{area}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-bold text-secondary uppercase mb-1">
+                                        {language === 'ar' ? 'القطعة (Block)' : 'Part / Block'}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="Block 2"
+                                        value={customerAddressForm.partNo || ''}
+                                        onChange={(e) => setCustomerAddressForm(prev => ({ ...prev, partNo: e.target.value }))}
+                                        className="w-full rounded-xl border border-border bg-surface px-2.5 py-2 text-primary text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-bold text-secondary uppercase mb-1">
+                                        {language === 'ar' ? 'الشارع' : 'Street'}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="Street 14"
+                                        value={customerAddressForm.street || ''}
+                                        onChange={(e) => setCustomerAddressForm(prev => ({ ...prev, street: e.target.value }))}
+                                        className="w-full rounded-xl border border-border bg-surface px-2.5 py-2 text-primary text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-bold text-secondary uppercase mb-1">
+                                        {language === 'ar' ? 'الجادة' : 'Jadda (Avenue)'}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="Jadda 1"
+                                        value={customerAddressForm.jadda || ''}
+                                        onChange={(e) => setCustomerAddressForm(prev => ({ ...prev, jadda: e.target.value }))}
+                                        className="w-full rounded-xl border border-border bg-surface px-2.5 py-2 text-primary text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-bold text-secondary uppercase mb-1">
+                                        {language === 'ar' ? 'المنزل / المبنى' : 'House / Bldg'}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="House 25"
+                                        value={customerAddressForm.houseNo || ''}
+                                        onChange={(e) => setCustomerAddressForm(prev => ({ ...prev, houseNo: e.target.value }))}
+                                        className="w-full rounded-xl border border-border bg-surface px-2.5 py-2 text-primary text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-bold text-secondary uppercase mb-1">
+                                        {language === 'ar' ? 'الدور / الطابق' : 'Floor / Level'}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="Floor 2"
+                                        value={customerAddressForm.levelNo || ''}
+                                        onChange={(e) => setCustomerAddressForm(prev => ({ ...prev, levelNo: e.target.value }))}
+                                        className="w-full rounded-xl border border-border bg-surface px-2.5 py-2 text-primary text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-bold text-secondary uppercase mb-1">
+                                        {language === 'ar' ? 'الشقة' : 'Flat / Apt'}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="Apt 4"
+                                        value={customerAddressForm.flatNo || ''}
+                                        onChange={(e) => setCustomerAddressForm(prev => ({ ...prev, flatNo: e.target.value }))}
+                                        className="w-full rounded-xl border border-border bg-surface px-2.5 py-2 text-primary text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+
+                                <div className="col-span-2">
+                                    <label className="block text-[10px] font-bold text-secondary uppercase mb-1">
+                                        {language === 'ar' ? 'الرقم الآلي للعنوان (PACI No)' : 'PACI No.'}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="PACI 12345678"
+                                        value={customerAddressForm.paciNo || ''}
+                                        onChange={(e) => setCustomerAddressForm(prev => ({ ...prev, paciNo: e.target.value }))}
+                                        className="w-full rounded-xl border border-border bg-surface px-2.5 py-2 text-primary text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+
+                                <div className="col-span-full">
+                                    <label className="block text-[10px] font-bold text-secondary uppercase mb-1">
+                                        {language === 'ar' ? 'ملاحظات التوصيل / تفاصيل إضافية' : 'Address & Delivery Notes'}
+                                    </label>
+                                    <textarea
+                                        rows="2"
+                                        placeholder={language === 'ar' ? 'بجانب المسجد، الرنين مرتين...' : 'Near the park, leave at door...'}
+                                        value={customerAddressForm.addressNotes || ''}
+                                        onChange={(e) => setCustomerAddressForm(prev => ({ ...prev, addressNotes: e.target.value }))}
+                                        className="w-full rounded-xl border border-border bg-surface px-2.5 py-2 text-primary text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Buttons */}
+                            <div className="flex items-center gap-3 pt-3 border-t border-border/60">
+                                <button
+                                    type="button"
+                                    onClick={handleCloseCustomerAddressModal}
+                                    className="flex-1 py-2.5 px-4 rounded-xl border border-border text-xs font-bold text-secondary hover:text-primary hover:bg-surface-alt transition cursor-pointer"
+                                >
+                                    {language === 'ar' ? 'إلغاء (البقاء استلام فرع)' : 'Cancel (Keep Branch)'}
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSavingCustomerAddress}
+                                    className="flex-1 py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-600/20 transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                    {isSavingCustomerAddress ? (
+                                        <span>{language === 'ar' ? 'جاري الحفظ...' : 'Saving...'}</span>
+                                    ) : (
+                                        <>
+                                            <FiCheck size={15} />
+                                            <span>{language === 'ar' ? 'حفظ واختيار توصيل منزلي' : 'Save & Select Home Delivery'}</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>,
                 document.body

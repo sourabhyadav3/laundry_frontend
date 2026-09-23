@@ -249,7 +249,7 @@ const Reports = () => {
           { header: language === 'ar' ? 'الاسم' : 'Name', accessor: 'name' },
           { header: language === 'ar' ? 'الهاتف' : 'Phone', accessor: 'phone' },
           { header: language === 'ar' ? 'تاريخ التسجيل' : 'Registered', accessor: 'registered', format: (val) => formatDate(val) },
-          { header: language === 'ar' ? 'الخصم الدائم' : 'Discount', accessor: 'discount', format: (val) => val ? `${val}%` : '0%' },
+          { header: language === 'ar' ? 'الخصم الدائم' : 'Discount', accessor: 'discount', format: (val) => { if (!val || val === '0' || val === '0%') return '0%'; return String(val).endsWith('%') ? val : `${val}%`; } },
           { header: language === 'ar' ? 'عدد الطلبات' : 'Total Orders', accessor: 'ordersCount' },
           { header: language === 'ar' ? 'الرصيد المستحق' : 'Due Balance', accessor: 'balance', format: (val) => formatCurrency(val) },
         ];
@@ -845,9 +845,12 @@ const Reports = () => {
               <table className="w-full border-collapse text-xs text-left">
                 <thead>
                   <tr className="bg-surface-alt/75 text-secondary border-b border-border font-bold">
-                    {customReport.columns.map((c) => (
-                      <th key={c.accessor} className="p-3">{c.header}</th>
-                    ))}
+                    {customReport.columns.map((c) => {
+                      const isTotal = /total|إجمالي|المجموع/i.test(c.header || '') || /total/i.test(c.accessor || '');
+                      return (
+                        <th key={c.accessor} className={`p-3 ${isTotal ? 'font-bold text-primary' : ''}`}>{c.header}</th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody>
@@ -863,8 +866,9 @@ const Reports = () => {
                         {customReport.columns.map((c) => {
                           const rawVal = row[c.accessor];
                           const formattedVal = c.format ? c.format(rawVal, row) : rawVal;
+                          const isTotal = /total|إجمالي|المجموع/i.test(c.header || '') || /total/i.test(c.accessor || '');
                           return (
-                            <td key={c.accessor} className="p-3 font-medium text-primary">
+                            <td key={c.accessor} className={`p-3 text-primary ${isTotal ? 'font-bold' : 'font-medium'}`}>
                               {formattedVal ?? 'N/A'}
                             </td>
                           );

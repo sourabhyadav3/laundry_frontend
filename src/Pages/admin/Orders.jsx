@@ -361,7 +361,15 @@ const Orders = () => {
       accessor: 'paymentStatus',
       cell: (row) => <span className={`status-pill border ${paymentStatusStyles[row.paymentStatus] || paymentStatusStyles.Pending}`}>{row.paymentStatus}</span>,
     },
-    { header: 'Amount', accessor: 'totalAmount', format: (val) => formatCurrency(val) },
+    {
+      header: 'Amount',
+      accessor: 'totalAmount',
+      cell: (row) => (
+        <span className="font-extrabold text-[15px] font-mono text-primary" style={{ fontWeight: 800, fontSize: '15px' }}>
+          {formatCurrency(row.totalAmount)}
+        </span>
+      ),
+    },
     { header: 'Date', accessor: 'date', format: (val) => formatDate(val) },
     {
       header: 'Actions',
@@ -457,7 +465,7 @@ const Orders = () => {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-1">
           <h2 className="text-xl font-semibold text-primary">Orders List</h2>
-          <p className="text-sm text-secondary">Total: {filteredOrders.length} orders | Total Value: {formatCurrency(filteredOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0))}</p>
+          <p className="text-sm text-secondary">Total: {filteredOrders.length} orders</p>
         </div>
         <button
           onClick={() => exportToCSV(filteredOrders, 'orders.csv')}

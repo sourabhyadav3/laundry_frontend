@@ -10,6 +10,11 @@ const EditStaff = () => {
 
   const staffMember = staff.find((s) => String(s.id || s._id || '') === String(id));
 
+  const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const isSuperAdmin = storedUser.role === 'Super Admin';
+  const selectedBranchStorage = localStorage.getItem('selected_branch');
+  const adminBranchId = (selectedBranchStorage && selectedBranchStorage !== 'All') ? selectedBranchStorage : (storedUser.branchId || storedUser.branch || '');
+
   const [formData, setFormData] = useState({
     fullName: staffMember?.name || '',
     email: staffMember?.email || '',
@@ -17,7 +22,7 @@ const EditStaff = () => {
     address: staffMember?.address || '',
     role: staffMember?.role || 'Counter Staff',
     status: staffMember?.status || 'Active',
-    assignedBranch: staffMember?.assignedBranch || '',
+    assignedBranch: staffMember?.branchId || staffMember?.assignedBranch || (isSuperAdmin ? '' : adminBranchId),
   });
 
   const [errors, setErrors] = useState({});
@@ -44,11 +49,11 @@ const EditStaff = () => {
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) newErrors.email = 'Invalid email format';
 
     if (!formData.phone.trim()) newErrors.phone = 'Phone Number is required';
-    else if (!/^\d{3}-?\d{3}-?\d{4}$/.test(formData.phone.replace(/-/g, ''))) newErrors.phone = 'Invalid phone format';
+    else if (!/^\+?\d{8,15}$/.test(formData.phone.replace(/[\s-]/g, ''))) newErrors.phone = 'Invalid phone format (min 8 digits)';
 
     if (!formData.address.trim()) newErrors.address = 'Address is required';
 
-    if (formData.role !== 'Admin' && !formData.assignedBranch) {
+    if (isSuperAdmin && formData.role !== 'Admin' && !formData.assignedBranch) {
       newErrors.assignedBranch = 'Branch assignment is required for this role';
     }
 
@@ -73,6 +78,7 @@ const EditStaff = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (validateForm()) {
+      const targetBranch = isSuperAdmin ? formData.assignedBranch : (formData.assignedBranch || adminBranchId);
       const updatedFields = {
         name: formData.fullName,
         email: formData.email,
@@ -80,7 +86,8 @@ const EditStaff = () => {
         address: formData.address,
         role: formData.role,
         status: formData.status,
-        branchId: formData.assignedBranch
+        branchId: targetBranch,
+        assignedBranch: targetBranch
       };
       updateStaff(staffMember.id || staffMember._id, updatedFields).then((success) => {
         if (success) {
@@ -212,7 +219,7 @@ const EditStaff = () => {
               </select>
             </div>
 
-            {formData.role !== 'Admin' && (
+            {isSuperAdmin && formData.role !== 'Admin' && (
               <div>
                 <label className="block text-sm font-semibold text-secondary">Assigned Branch *</label>
                 <select

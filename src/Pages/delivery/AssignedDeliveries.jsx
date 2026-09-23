@@ -7,50 +7,57 @@ import { formatDate } from '../../utils/exportUtils';
 import DeliveryTable from '../../Components/delivery/DeliveryTable';
 import DeliveryDetailsModal from '../../Components/delivery/DeliveryDetailsModal';
 
-const DEFAULT_STAFF = 'Frank Brown';
-
 const formatDeliveryAddress = (row, isAr) => {
+  const parts = [];
   if (isAr) {
-    return [
-      `المنطقة: ${row.areaName || 'Salmiya'}`,
-      `قطعة: ${row.partNo || '12'}`,
-      `الشارع: ${row.street || '5'}`,
-      `الجادة: ${row.jadda || '2'}`,
-      `المنزل: ${row.houseNo || '14'}`,
-      `الطابق: ${row.levelNo || '3'}`,
-      `الشقة: ${row.flatNo || '12'}`,
-    ].join(' | ');
+    if (row.areaName) parts.push(`المنطقة: ${row.areaName}`);
+    if (row.partNo) parts.push(`قطعة: ${row.partNo}`);
+    if (row.street) parts.push(`الشارع: ${row.street}`);
+    if (row.jadda) parts.push(`الجادة: ${row.jadda}`);
+    if (row.houseNo) parts.push(`المنزل: ${row.houseNo}`);
+    if (row.levelNo) parts.push(`الطابق: ${row.levelNo}`);
+    if (row.flatNo) parts.push(`الشقة: ${row.flatNo}`);
+    if (row.paciNo) parts.push(`الرقم الآلي (PACI): ${row.paciNo}`);
+    if (parts.length === 0 && row.address) parts.push(row.address);
+    return parts.join(' | ') || 'Salmiya';
   }
-  return [
-    `Area: ${row.areaName || 'Salmiya'}`,
-    `Block: ${row.partNo || '12'}`,
-    `S: ${row.street || '5'}`,
-    `Jadah: ${row.jadda || '2'}`,
-    `House: ${row.houseNo || '14'}`,
-    `F: ${row.levelNo || '3'}`,
-    `Flat: ${row.flatNo || '12'}`,
-  ].join(' | ');
+
+  if (row.areaName) parts.push(`Area: ${row.areaName}`);
+  if (row.partNo) parts.push(`Block: ${row.partNo}`);
+  if (row.street) parts.push(`S: ${row.street}`);
+  if (row.jadda) parts.push(`Jadah: ${row.jadda}`);
+  if (row.houseNo) parts.push(`House: ${row.houseNo}`);
+  if (row.levelNo) parts.push(`F: ${row.levelNo}`);
+  if (row.flatNo) parts.push(`Flat: ${row.flatNo}`);
+  if (row.paciNo) parts.push(`PACI: ${row.paciNo}`);
+  if (parts.length === 0 && row.address) parts.push(row.address);
+  return parts.join(' | ') || 'Salmiya';
 };
 
 const AssignedDeliveries = () => {
-  const { deliveries, orders, updateDeliveryStatus } = useContext(AdminStateContext);
+  const { deliveries, orders, customers = [], updateDeliveryStatus } = useContext(AdminStateContext);
   const { language, t } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
   const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const staffName = storedUser?.name || DEFAULT_STAFF;
+  const staffName = storedUser?.name || '';
+  const staffUsername = storedUser?.username || '';
   const isAr = language === 'ar';
 
   const filtered = useMemo(
     () =>
       deliveries
         .filter((d) => {
-          if (!staffName) return true;
-          const assigned = (d.assignedStaff || '').toLowerCase();
-          const target = (staffName || '').toLowerCase();
-          return !assigned || assigned === target || assigned.includes(target) || target.includes(assigned);
+          const assigned = (d.assignedStaff || '').trim().toLowerCase();
+          if (!assigned) return false;
+          const targetName = staffName.trim().toLowerCase();
+          const targetUsername = staffUsername.trim().toLowerCase();
+          return (
+            (targetName && (assigned === targetName || assigned.includes(targetName) || targetName.includes(assigned))) ||
+            (targetUsername && (assigned === targetUsername || assigned.includes(targetUsername) || targetUsername.includes(assigned)))
+          );
         })
         .filter(
           (d) =>
@@ -60,8 +67,22 @@ const AssignedDeliveries = () => {
         )
         .map(d => {
           const order = d.orderNumber ? orders.find(o => o.number === d.orderNumber) : null;
+          const customerMatch = customers.find(c => 
+            (c.name && d.customer && c.name.trim().toLowerCase() === d.customer.trim().toLowerCase()) ||
+            (c.phone && d.contactNumber && c.phone === d.contactNumber) ||
+            (order && (c._id === order.customer || c.id === order.customer || c.id === order.customerId || c._id === order.customerId))
+          );
+
           return {
             ...d,
+            areaName: d.areaName || customerMatch?.areaName || order?.areaName || '',
+            partNo: d.partNo || customerMatch?.partNo || order?.partNo || '',
+            street: d.street || customerMatch?.street || order?.street || '',
+            jadda: d.jadda || customerMatch?.jadda || order?.jadda || '',
+            houseNo: d.houseNo || customerMatch?.houseNo || order?.houseNo || '',
+            levelNo: d.levelNo || customerMatch?.levelNo || order?.levelNo || '',
+            flatNo: d.flatNo || customerMatch?.flatNo || order?.flatNo || '',
+            paciNo: d.paciNo || customerMatch?.paciNo || order?.paciNo || '',
             serviceType: order ? order.serviceType : d.serviceType
           };
         })
@@ -71,7 +92,7 @@ const AssignedDeliveries = () => {
           }
           return String(b.deliveryId || '').localeCompare(String(a.deliveryId || ''), undefined, { numeric: true, sensitivity: 'base' });
         }),
-    [deliveries, orders, searchTerm, staffName]
+    [deliveries, orders, customers, searchTerm, staffName, staffUsername]
   );
 
   const handlePrintList = () => {

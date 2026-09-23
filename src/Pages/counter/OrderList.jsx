@@ -63,9 +63,35 @@ const OrderList = () => {
   const [viewDeliveryDate, setViewDeliveryDate] = useState('');
   const [viewDeliveryTime, setViewDeliveryTime] = useState('');
 
+  const [customOrderIds, setCustomOrderIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('orders_custom_order') || '[]');
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const handleReorder = (fromIndex, toIndex) => {
+    const list = [...filteredOrders];
+    const [movedItem] = list.splice(fromIndex, 1);
+    list.splice(toIndex, 0, movedItem);
+
+    const newOrderKeys = list.map(o => String(o.id || o._id || o.number));
+    setCustomOrderIds(newOrderKeys);
+    try {
+      localStorage.setItem('orders_custom_order', JSON.stringify(newOrderKeys));
+      toast.info(language === 'ar' ? 'تم تحديث ترتيب الطلبات' : 'Order position updated', { autoClose: 1500 });
+    } catch (e) {}
+  };
+
   const filteredOrders = useMemo(
-    () =>
-      orders
+    () => {
+      const orderPriorityMap = new Map();
+      customOrderIds.forEach((key, index) => {
+        orderPriorityMap.set(key, index);
+      });
+
+      return orders
         .filter(
           (o) => {
             const matchesBranch = (() => {
@@ -132,6 +158,17 @@ const OrderList = () => {
           }
         )
         .sort((a, b) => {
+          const keyA = String(a.id || a._id || a.number);
+          const keyB = String(b.id || b._id || b.number);
+          const hasPosA = orderPriorityMap.has(keyA);
+          const hasPosB = orderPriorityMap.has(keyB);
+
+          if (hasPosA && hasPosB) {
+            return orderPriorityMap.get(keyA) - orderPriorityMap.get(keyB);
+          }
+          if (hasPosA) return -1;
+          if (hasPosB) return 1;
+
           if (a.createdAt && b.createdAt) {
             return new Date(b.createdAt) - new Date(a.createdAt);
           }
@@ -139,8 +176,9 @@ const OrderList = () => {
           const numB = Number(b.id);
           if (!isNaN(numA) && !isNaN(numB)) return numB - numA;
           return String(b.id || '').localeCompare(String(a.id || ''));
-        }),
-    [orders, searchTerm, selectedBranch, statusFilter, paymentFilter, deliveryFilter, branches]
+        });
+    },
+    [orders, searchTerm, selectedBranch, statusFilter, paymentFilter, deliveryFilter, branches, customOrderIds]
   );
 
   const handleUpdateStatus = (order) => {
@@ -373,6 +411,7 @@ const OrderList = () => {
           orders={filteredOrders}
           selectedOrderIds={selectedOrderIds}
           setSelectedOrderIds={setSelectedOrderIds}
+          onReorder={handleReorder}
           onView={(o) => {
             setSelectedOrder(o);
             const isHome = String(o.deliveryType || '').trim().toLowerCase() === 'home delivery' || o.isHomeDelivery === true || o.deliveryMode === 'home';

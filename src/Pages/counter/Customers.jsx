@@ -115,9 +115,16 @@ const Customers = () => {
       .map(p => p.trim())
       .filter(p => p !== '');
 
+    const currentBranchId = (selectedBranch !== 'All' ? selectedBranch : null) || storedUser.branchId || storedUser.branch || null;
+
     if (newNumbers.length > 0) {
       const duplicateCustomer = customers.find(c => {
         if (isEditing && String(c.id) === String(formData.id)) {
+          return false;
+        }
+        // Scope phone check to current branch
+        const cBranch = String(c.branchId || c.branch || '');
+        if (currentBranchId && cBranch && cBranch !== String(currentBranchId)) {
           return false;
         }
         const cPhone = (c.phone || '').trim();
@@ -132,7 +139,7 @@ const Customers = () => {
       });
 
       if (duplicateCustomer) {
-        toast.error(`A customer with this phone number already exists: ${duplicateCustomer.name}`);
+        toast.error(`A customer with this phone number already exists in this branch: ${duplicateCustomer.name}`);
         return;
       }
     }
@@ -193,14 +200,18 @@ const Customers = () => {
       branch: (selectedBranch !== 'All' ? selectedBranch : null) || storedUser.branchId || storedUser.branch || null
     };
 
-    // Check for duplicate email
+    // Check for duplicate email within same branch
     if (finalCustomer.email && finalCustomer.email.trim()) {
       const duplicateEmail = customers.find(c => {
         if (isEditing && String(c.id) === String(formData.id)) return false;
+        const cBranch = String(c.branchId || c.branch || '');
+        if (currentBranchId && cBranch && cBranch !== String(currentBranchId)) {
+          return false;
+        }
         return c.email && c.email.trim().toLowerCase() === finalCustomer.email.trim().toLowerCase();
       });
       if (duplicateEmail) {
-        toast.error(`A customer with this email already exists: ${duplicateEmail.name}`);
+        toast.error(`A customer with this email already exists in this branch: ${duplicateEmail.name}`);
         return;
       }
     }
@@ -652,7 +663,7 @@ const Customers = () => {
                           <th className="px-3 py-2 text-left">Order #</th>
                           <th className="px-3 py-2 text-left">Date</th>
                           <th className="px-3 py-2 text-center">Items</th>
-                          <th className="px-3 py-2 text-right">Total</th>
+                          <th className="px-3 py-2 text-right font-bold">Total</th>
                           <th className="px-3 py-2 text-right">Due</th>
                           <th className="px-3 py-2 text-right">Status</th>
                         </tr>
@@ -670,7 +681,7 @@ const Customers = () => {
                               <td className="px-3 py-2 font-mono font-bold text-primary">{ord.number || ord.id}</td>
                               <td className="px-3 py-2 text-secondary">{formatDate(ord.createdAt || ord.date)}</td>
                               <td className="px-3 py-2 text-center font-semibold">{itemsCount}</td>
-                              <td className="px-3 py-2 text-right font-mono font-semibold">{formatCurrency(total)}</td>
+                              <td className="px-3 py-2 text-right font-mono font-bold">{formatCurrency(total)}</td>
                               <td className={`px-3 py-2 text-right font-mono font-bold ${due > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
                                 {due > 0 ? formatCurrency(due) : '0.000'}
                               </td>

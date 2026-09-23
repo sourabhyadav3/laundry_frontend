@@ -30,6 +30,7 @@ const DeliveryTable = ({ deliveries, onView, onUpdateStatus }) => {
               <div><strong>المنزل:</strong> {row.houseNo || '14'}</div>
               <div><strong>الطابق:</strong> {row.levelNo || '3'}</div>
               <div><strong>الشقة:</strong> {row.flatNo || '12'}</div>
+              {row.paciNo && <div><strong>الرقم الآلي (PACI):</strong> {row.paciNo}</div>}
             </div>
           );
         }
@@ -42,6 +43,7 @@ const DeliveryTable = ({ deliveries, onView, onUpdateStatus }) => {
             <div><strong>House:</strong> {row.houseNo || '14'}</div>
             <div><strong>F:</strong> {row.levelNo || '3'}</div>
             <div><strong>Flat:</strong> {row.flatNo || '12'}</div>
+            {row.paciNo && <div><strong>PACI:</strong> {row.paciNo}</div>}
           </div>
         );
       }

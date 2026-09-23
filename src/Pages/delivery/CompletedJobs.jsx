@@ -5,19 +5,29 @@ import CompletedJobsTable from '../../Components/delivery/CompletedJobsTable';
 import { FiCheckCircle, FiCalendar, FiTrendingUp } from 'react-icons/fi';
 import { generateCompletedJobs } from '../../data/mockDataGenerators';
 
-const DEFAULT_STAFF = 'Frank Brown';
-
 const CompletedJobs = () => {
   const { pickups, deliveries } = useContext(AdminStateContext);
   const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const staffName = storedUser?.name || DEFAULT_STAFF;
+  const staffName = storedUser?.name || '';
+  const staffUsername = storedUser?.username || '';
 
   const jobs = useMemo(() => {
-    const myPickups = pickups.filter((p) => p.assignedStaff === staffName);
-    const myDeliveries = deliveries.filter((d) => d.assignedStaff === staffName);
+    const isStaffMatch = (assigned) => {
+      const a = (assigned || '').trim().toLowerCase();
+      if (!a) return false;
+      const targetName = staffName.trim().toLowerCase();
+      const targetUsername = staffUsername.trim().toLowerCase();
+      return (
+        (targetName && (a === targetName || a.includes(targetName) || targetName.includes(a))) ||
+        (targetUsername && (a === targetUsername || a.includes(targetUsername) || targetUsername.includes(a)))
+      );
+    };
+
+    const myPickups = pickups.filter((p) => isStaffMatch(p.assignedStaff));
+    const myDeliveries = deliveries.filter((d) => isStaffMatch(d.assignedStaff));
     const list = generateCompletedJobs(myPickups, myDeliveries);
     return list.sort((a, b) => new Date(b.completionDate || b.createdAt || 0) - new Date(a.completionDate || a.createdAt || 0));
-  }, [pickups, deliveries, staffName]);
+  }, [pickups, deliveries, staffName, staffUsername]);
 
   const thisMonth = new Date().getMonth();
   const completedThisMonth = jobs.filter(

@@ -1,6 +1,6 @@
 import React, { useContext, useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiSearch, FiPlus, FiTrash2, FiSave, FiLogOut, FiTruck, FiUsers } from 'react-icons/fi';
+import { FiSearch, FiTrash2, FiSave, FiLogOut, FiTruck, FiUsers } from 'react-icons/fi';
 import { AdminStateContext } from '../../context/AdminStateContext';
 import { toast } from 'react-toastify';
 import { useLanguage } from '../../context/LanguageContext';
@@ -115,7 +115,7 @@ const Drivers = () => {
   const { language } = useLanguage();
   const tLocal = labels[language] || labels.en;
 
-  const { drivers, addDriver, updateDriver, deleteDriver, branches, areas } = useContext(AdminStateContext);
+  const { drivers, updateDriver, deleteDriver, branches, areas } = useContext(AdminStateContext);
 
   const loggedInUser = useMemo(() => {
     try {
@@ -138,15 +138,6 @@ const Drivers = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [searchType, setSearchType] = useState('name'); // 'name', 'phone', or 'area'
-
-  useEffect(() => {
-    if (!isSuperAdmin && adminBranchObj && !form.branch && !form.id) {
-      setForm(prev => ({
-        ...prev,
-        branch: adminBranchObj.name
-      }));
-    }
-  }, [adminBranchObj, isSuperAdmin, form.branch, form.id]);
 
   const filteredDrivers = useMemo(() => {
     return drivers
@@ -189,18 +180,26 @@ const Drivers = () => {
     });
   };
 
-  const handleNew = () => {
-    const nextNum = drivers.length
-      ? Math.max(...drivers.map((d) => parseInt(String(d.driverNo).replace(/\D/g, ''), 10) || 0)) + 1
-      : 101;
-    setForm({
-      ...emptyDriverForm,
-      driverNo: `DRV-${nextNum}`,
-      branch: (!isSuperAdmin && adminBranchObj) ? adminBranchObj.name : '',
-    });
-  };
+  useEffect(() => {
+    if (!form.id && filteredDrivers.length > 0) {
+      handleSelectDriver(filteredDrivers[0]);
+    }
+  }, [filteredDrivers, form.id]);
+
+  useEffect(() => {
+    if (!isSuperAdmin && adminBranchObj && !form.branch && !form.id) {
+      setForm(prev => ({
+        ...prev,
+        branch: adminBranchObj.name
+      }));
+    }
+  }, [adminBranchObj, isSuperAdmin, form.branch, form.id]);
 
   const handleSave = () => {
+    if (!form.id) {
+      toast.warning(language === 'ar' ? 'يرجى تحديد سائق من القائمة لتعديله. يتم إنشاء السائقين الجدد من إدارة الموظفين.' : 'Please select a driver from the list to edit. New drivers must be created in Staff Management.');
+      return;
+    }
     if (!form.driverName.trim()) {
       toast.error(language === 'ar' ? 'اسم السائق مطلوب' : 'Driver Name is required');
       return;
@@ -210,15 +209,8 @@ const Drivers = () => {
       return;
     }
 
-    if (form.id) {
-      updateDriver(form);
-      toast.success(language === 'ar' ? 'تم تحديث بيانات السائق بنجاح' : 'Driver details updated successfully');
-    } else {
-      const newId = Date.now();
-      addDriver({ ...form, id: newId });
-      toast.success(language === 'ar' ? 'تم إضافة السائق بنجاح' : 'Driver added successfully');
-      setForm(emptyDriverForm);
-    }
+    updateDriver(form);
+    toast.success(language === 'ar' ? 'تم تحديث بيانات السائق بنجاح' : 'Driver details updated successfully');
   };
 
   const handleDelete = () => {
@@ -311,16 +303,7 @@ const Drivers = () => {
               />
             </div>
 
-            {/* Tel */}
-            <div>
-              <label className="block text-xs font-semibold text-secondary uppercase">{tLocal.tel}</label>
-              <input
-                type="text"
-                value={form.tel}
-                onChange={(e) => setForm({ ...form, tel: e.target.value })}
-                className="mt-1 w-full text-sm rounded-lg border border-border bg-surface px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400/40 text-primary"
-              />
-            </div>
+
 
             {/* Car No */}
             <div>
@@ -334,94 +317,6 @@ const Drivers = () => {
             </div>
 
 
-
-            {/* Street */}
-            <div>
-              <label className="block text-xs font-semibold text-secondary uppercase">{tLocal.street}</label>
-              <input
-                type="text"
-                value={form.street}
-                onChange={(e) => setForm({ ...form, street: e.target.value })}
-                className="mt-1 w-full text-sm rounded-lg border border-border bg-surface px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400/40 text-primary"
-              />
-            </div>
-
-            {/* Part */}
-            <div>
-              <label className="block text-xs font-semibold text-secondary uppercase">{tLocal.part}</label>
-              <input
-                type="text"
-                value={form.part}
-                onChange={(e) => setForm({ ...form, part: e.target.value })}
-                className="mt-1 w-full text-sm rounded-lg border border-border bg-surface px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400/40 text-primary"
-              />
-            </div>
-
-            {/* Jadda */}
-            <div>
-              <label className="block text-xs font-semibold text-secondary uppercase">{tLocal.jadda}</label>
-              <input
-                type="text"
-                value={form.jadda}
-                onChange={(e) => setForm({ ...form, jadda: e.target.value })}
-                className="mt-1 w-full text-sm rounded-lg border border-border bg-surface px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400/40 text-primary"
-              />
-            </div>
-
-            {/* House No */}
-            <div>
-              <label className="block text-xs font-semibold text-secondary uppercase">{tLocal.houseNo}</label>
-              <input
-                type="text"
-                value={form.houseNo}
-                onChange={(e) => setForm({ ...form, houseNo: e.target.value })}
-                className="mt-1 w-full text-sm rounded-lg border border-border bg-surface px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400/40 text-primary"
-              />
-            </div>
-
-            {/* Floor */}
-            <div>
-              <label className="block text-xs font-semibold text-secondary uppercase">{tLocal.floor}</label>
-              <input
-                type="text"
-                value={form.floor}
-                onChange={(e) => setForm({ ...form, floor: e.target.value })}
-                className="mt-1 w-full text-sm rounded-lg border border-border bg-surface px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400/40 text-primary"
-              />
-            </div>
-
-            {/* Flat */}
-            <div>
-              <label className="block text-xs font-semibold text-secondary uppercase">{tLocal.flat}</label>
-              <input
-                type="text"
-                value={form.flat}
-                onChange={(e) => setForm({ ...form, flat: e.target.value })}
-                className="mt-1 w-full text-sm rounded-lg border border-border bg-surface px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400/40 text-primary"
-              />
-            </div>
-
-            {/* Civil ID */}
-            <div>
-              <label className="block text-xs font-semibold text-secondary uppercase">{tLocal.civilId}</label>
-              <input
-                type="text"
-                value={form.civilId}
-                onChange={(e) => setForm({ ...form, civilId: e.target.value })}
-                className="mt-1 w-full text-sm rounded-lg border border-border bg-surface px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400/40 text-primary"
-              />
-            </div>
-
-            {/* Nationality */}
-            <div>
-              <label className="block text-xs font-semibold text-secondary uppercase">{tLocal.nationality}</label>
-              <input
-                type="text"
-                value={form.nationality}
-                onChange={(e) => setForm({ ...form, nationality: e.target.value })}
-                className="mt-1 w-full text-sm rounded-lg border border-border bg-surface px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400/40 text-primary"
-              />
-            </div>
 
             {/* Branch */}
             <div>
@@ -487,40 +382,39 @@ const Drivers = () => {
           </div>
 
           {/* Form Action Buttons */}
-          <div className="border-t border-border pt-4 flex flex-wrap gap-2 justify-end">
-            <button
-              type="button"
-              onClick={handleNew}
-              className="px-4 py-2 text-xs font-bold rounded-xl border border-blue-500/30 bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-all uppercase tracking-wider flex items-center gap-1.5"
-            >
-              <FiPlus />
-              {tLocal.new}
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              className="px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow transition-all uppercase tracking-wider flex items-center gap-1.5"
-            >
-              <FiSave />
-              {tLocal.save}
-            </button>
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={!form.id}
-              className="px-4 py-2 text-xs font-bold rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 transition-all uppercase tracking-wider flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <FiTrash2 />
-              {tLocal.delete}
-            </button>
-            <button
-              type="button"
-              onClick={handleExit}
-              className="px-4 py-2 text-xs font-bold rounded-xl border border-border bg-surface hover:bg-surface-alt text-primary transition-all uppercase tracking-wider flex items-center gap-1.5"
-            >
-              <FiLogOut />
-              {tLocal.exit}
-            </button>
+          <div className="border-t border-border pt-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="text-xs text-secondary flex items-center gap-1.5">
+              <span className="inline-block w-2 h-2 rounded-full bg-blue-500"></span>
+              <span>{language === 'ar' ? 'يتم إضافة السائقين الجدد من إدارة الموظفين' : 'Drivers are created via Staff Management'}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={!form.id}
+                className="px-5 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow transition-all uppercase tracking-wider flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FiSave />
+                {tLocal.save}
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={!form.id}
+                className="px-4 py-2 text-xs font-bold rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 transition-all uppercase tracking-wider flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FiTrash2 />
+                {tLocal.delete}
+              </button>
+              <button
+                type="button"
+                onClick={handleExit}
+                className="px-4 py-2 text-xs font-bold rounded-xl border border-border bg-surface hover:bg-surface-alt text-primary transition-all uppercase tracking-wider flex items-center gap-1.5"
+              >
+                <FiLogOut />
+                {tLocal.exit}
+              </button>
+            </div>
           </div>
         </div>
       )}

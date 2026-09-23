@@ -360,6 +360,30 @@ const PublicReceipt = () => {
             <span className="text-black font-semibold">{order.deliveryType || 'Branch Pickup'}</span>
           </div>
 
+          {(order.areaName || order.street || order.partNo || order.houseNo || order.paciNo || order.address || order.addressNotes) && (
+            <div className="p-2.5 rounded-lg bg-gray-50 border border-gray-200 text-xs font-medium text-gray-800 space-y-1">
+              <div className="font-bold text-gray-900 border-b border-gray-200 pb-1 flex justify-between">
+                <span>Address / العنوان:</span>
+                {order.paciNo && <span className="text-blue-700 font-extrabold">PACI: {order.paciNo}</span>}
+              </div>
+              <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px] pt-0.5">
+                {order.areaName && <div><span className="text-gray-500 font-bold">Area:</span> {order.areaName}</div>}
+                {order.partNo && <div><span className="text-gray-500 font-bold">Block:</span> {order.partNo}</div>}
+                {order.street && <div><span className="text-gray-500 font-bold">Street:</span> {order.street}</div>}
+                {order.jadda && <div><span className="text-gray-500 font-bold">Jadah:</span> {order.jadda}</div>}
+                {order.houseNo && <div><span className="text-gray-500 font-bold">House:</span> {order.houseNo}</div>}
+                {order.levelNo && <div><span className="text-gray-500 font-bold">Floor:</span> {order.levelNo}</div>}
+                {order.flatNo && <div><span className="text-gray-500 font-bold">Flat:</span> {order.flatNo}</div>}
+                {order.paciNo && <div><span className="text-gray-500 font-bold">PACI No:</span> {order.paciNo}</div>}
+              </div>
+              {(order.addressNotes || order.address) && (
+                <div className="text-[11px] text-gray-600 italic pt-0.5 border-t border-gray-100">
+                  {order.addressNotes || order.address}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex justify-between text-xs font-bold text-gray-700">
             <span>Exp. Delivery / التسليم المتوقع:</span>
             <span className="text-black font-semibold text-right">

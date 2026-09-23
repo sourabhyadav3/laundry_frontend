@@ -1,7 +1,6 @@
 import React, { useContext, useState } from 'react';
 import { FiArrowLeft, FiAlertCircle } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
 import { AdminStateContext } from '../../context/AdminStateContext';
 
 const AddStaff = () => {
@@ -9,7 +8,8 @@ const AddStaff = () => {
   const { staff, addStaff, branches } = useContext(AdminStateContext);
   const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
   const isSuperAdmin = storedUser.role === 'Super Admin';
-  const adminBranchId = storedUser.branchId || '';
+  const selectedBranchStorage = localStorage.getItem('selected_branch');
+  const adminBranchId = (selectedBranchStorage && selectedBranchStorage !== 'All') ? selectedBranchStorage : (storedUser.branchId || storedUser.branch || '');
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -34,6 +34,7 @@ const AddStaff = () => {
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) newErrors.email = 'Invalid email format';
 
     if (!formData.phone.trim()) newErrors.phone = 'Phone Number is required';
+    else if (!/^\+?\d{8,15}$/.test(formData.phone.replace(/[\s-]/g, ''))) newErrors.phone = 'Invalid phone format (min 8 digits)';
 
     const duplicateEmail = staff.some(
       (s) => s.email.toLowerCase() === formData.email.trim().toLowerCase()
@@ -52,7 +53,7 @@ const AddStaff = () => {
 
     if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
 
-    if (formData.role !== 'Admin' && !formData.assignedBranch) {
+    if (isSuperAdmin && formData.role !== 'Admin' && !formData.assignedBranch) {
       newErrors.assignedBranch = 'Branch assignment is required for this role';
     }
 
@@ -74,10 +75,11 @@ const AddStaff = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (validateForm()) {
-      addStaff({
+      const targetBranch = isSuperAdmin ? formData.assignedBranch : (formData.assignedBranch || adminBranchId);
+      const ok = await addStaff({
         name: formData.fullName.trim(),
         email: formData.email.trim(),
         phone: formData.phone.trim(),
@@ -86,10 +88,12 @@ const AddStaff = () => {
         password: formData.password,
         role: formData.role,
         status: formData.status,
-        assignedBranch: formData.assignedBranch,
+        assignedBranch: targetBranch,
+        branchId: targetBranch
       });
-      toast.success(`${formData.fullName} has been added as ${formData.role}`);
-      navigate('/admin/staff');
+      if (ok !== false) {
+        navigate('/admin/staff');
+      }
     }
   };
 

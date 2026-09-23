@@ -552,9 +552,20 @@ export const AdminStateProvider = ({ children }) => {
         }
         return [res.data, ...prev];
       });
+
+      // If delivery staff was created, refresh drivers state immediately
+      if (member.role === 'Delivery Staff' || member.role === 'Driver') {
+        try {
+          const dRes = await api.get('/drivers');
+          if (Array.isArray(dRes.data)) setDrivers(dRes.data);
+        } catch (_) {}
+      }
+
       toast.success('Staff profile saved successfully');
+      return true;
     } catch (e) {
       toast.error(e.response?.data?.message || 'Failed to add staff member');
+      return false;
     }
   };
 
@@ -565,6 +576,10 @@ export const AdminStateProvider = ({ children }) => {
         roleName: updatedMember.role
       });
       setStaff(prev => prev.map(s => (s.id === id || s._id === id) ? res.data : s));
+      try {
+        const dRes = await api.get('/drivers');
+        if (Array.isArray(dRes.data)) setDrivers(dRes.data);
+      } catch (_) {}
       toast.success('Staff profile updated successfully');
       return true;
     } catch (e) {
@@ -577,6 +592,10 @@ export const AdminStateProvider = ({ children }) => {
     try {
       await api.delete(`/staff/${id}`);
       setStaff(prev => prev.filter(s => s.id !== id && s._id !== id));
+      try {
+        const dRes = await api.get('/drivers');
+        if (Array.isArray(dRes.data)) setDrivers(dRes.data);
+      } catch (_) {}
       toast.success('Staff member deleted successfully');
       return true;
     } catch (e) {
@@ -703,8 +722,10 @@ export const AdminStateProvider = ({ children }) => {
       }
       await fetchData();
       toast.success('Delivery dispatch assignment updated');
+      return true;
     } catch (e) {
       toast.error(e.response?.data?.message || 'Failed to update delivery job');
+      return false;
     }
   };
 
@@ -722,8 +743,10 @@ export const AdminStateProvider = ({ children }) => {
       }
       await fetchData();
       toast.success('Pickup dispatch assignment updated');
+      return true;
     } catch (e) {
       toast.error(e.response?.data?.message || 'Failed to update pickup job');
+      return false;
     }
   };
 

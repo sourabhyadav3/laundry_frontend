@@ -18,37 +18,19 @@ const LcdDisplay = () => {
   const [time, setTime] = useState(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Sync state with Context orders or LocalStorage
+  // Auto sync when context orders change
   const loadLatestOrders = () => {
     setIsRefreshing(true);
-    const saved = localStorage.getItem('orders_list');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setLocalOrders(parsed);
-        } else {
-          setLocalOrders(orders);
-        }
-      } catch (e) {
-        setLocalOrders(orders);
-      }
-    } else {
+    if (Array.isArray(orders) && orders.length > 0) {
       setLocalOrders(orders);
     }
     setTimeout(() => setIsRefreshing(false), 400);
   };
 
-  // Auto refresh interval (every 5 seconds)
   useEffect(() => {
     loadLatestOrders();
-    const interval = setInterval(() => {
-      loadLatestOrders();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders]);
 
   // Listen for storage events (instant sync across tabs)
   useEffect(() => {
@@ -200,12 +182,7 @@ const LcdDisplay = () => {
     return list;
   }, [orders, localOrders, deliveries, pickups]);
 
-  // Keep localOrders synced with context orders
-  useEffect(() => {
-    if (Array.isArray(orders) && orders.length > 0) {
-      setLocalOrders(orders);
-    }
-  }, [orders]);
+  // Duplicate useEffect removed
 
   // isOrderFinishedOrReady function removed to allow all statuses to be displayed on LCD
 
@@ -289,6 +266,29 @@ const LcdDisplay = () => {
     const type = (order?.serviceType || order?.service || '').toLowerCase();
     return type.includes('express') || type.includes('urgent');
   };
+
+  const isExpressReadyOrFinished = (order) => {
+    const status = normalizeOrderStatus(order.status || 'Waiting');
+    const finishedStatuses = ['Ready', 'Ready for delivery', 'Ready for shop', 'Delivered', 'Store', 'Store 1', 'Store 2', 'Return', 'Completed', 'Cancelled'];
+    return finishedStatuses.includes(status);
+  };
+
+  const activeExpressOrders = useMemo(() => {
+    return filteredLocalOrders.filter(order => isExpress(order) && !isExpressReadyOrFinished(order));
+  }, [filteredLocalOrders]);
+
+  const expressOrdersSummary = useMemo(() => {
+    const totalInvoices = activeExpressOrders.length;
+    const totalArticles = activeExpressOrders.reduce((sum, order) => {
+      const itemsSum = Array.isArray(order.items) 
+        ? order.items.reduce((acc, item) => acc + (Number(item.quantity) || 1), 0)
+        : Array.isArray(order.itemDetails)
+          ? order.itemDetails.reduce((acc, item) => acc + (Number(item.quantity) || 1), 0)
+          : 0;
+      return sum + itemsSum;
+    }, 0);
+    return { totalInvoices, totalArticles };
+  }, [activeExpressOrders]);
 
   // Dynamic remaining countdown calculation based on invoice/order expected time & matched service
   const getOrderTargetTime = (order) => {
@@ -546,6 +546,9 @@ const LcdDisplay = () => {
                 <span className={`relative inline-flex rounded-full h-3 w-3 ${viewMode === 'express' ? 'bg-white' : 'bg-rose-500'}`}></span>
               </span>
               <span className="hidden sm:inline">{language === 'ar' ? 'مستعجل' : 'Express'}</span>
+              <span className="ml-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-white/20 font-bold">
+                {activeExpressOrders.length}
+              </span>
             </button>
             <button
               onClick={() => setViewMode('delivery')}
@@ -904,7 +907,7 @@ const LcdDisplay = () => {
                   </tr>
                 </thead>
                 <tbody className={`divide-y ${isDark ? 'divide-slate-800/60' : 'divide-slate-200'}`}>
-                  {(viewMode === 'express' ? filteredLocalOrders.filter(isExpress) : filteredLocalOrders).map(order => {
+                  {(viewMode === 'express' ? activeExpressOrders : filteredLocalOrders).map(order => {
                     let statusLabelClass = isDark 
                       ? 'bg-slate-800/60 text-slate-300 border-slate-700/50' 
                       : 'bg-slate-100 text-slate-600 border-slate-200';
@@ -1054,7 +1057,7 @@ const LcdDisplay = () => {
                       </tr>
                     );
                   })}
-                  {(viewMode === 'express' ? filteredLocalOrders.filter(isExpress) : filteredLocalOrders).length === 0 && (
+                  {(viewMode === 'express' ? activeExpressOrders : filteredLocalOrders).length === 0 && (
                     <tr>
                       <td colSpan="6" className={`p-12 text-center text-sm font-bold ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
                         {language === 'ar' ? 'لم يتم العثور على طلبات.' : 'No orders found.'}
@@ -1063,6 +1066,23 @@ const LcdDisplay = () => {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* Floating Summary Badge for Express Mode - Fixed at bottom center */}
+        {viewMode === 'express' && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-fade-in-up">
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full shadow-2xl p-1.5 md:p-2 flex items-center gap-4 md:gap-6 border border-white/20 backdrop-blur-md">
+              <div className="flex items-center gap-2 md:gap-3 pl-3 md:pl-4">
+                <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-blue-100">Total Invoices</span>
+                <span className="bg-white text-blue-700 font-mono font-black text-lg md:text-xl px-3 md:px-4 py-0.5 md:py-1 rounded-full shadow-sm">{expressOrdersSummary.totalInvoices}</span>
+              </div>
+              <div className="w-px h-6 md:h-8 bg-white/20"></div>
+              <div className="flex items-center gap-2 md:gap-3 pr-3 md:pr-4">
+                <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-blue-100">Total Articles</span>
+                <span className="bg-white text-indigo-700 font-mono font-black text-lg md:text-xl px-3 md:px-4 py-0.5 md:py-1 rounded-full shadow-sm">{expressOrdersSummary.totalArticles}</span>
+              </div>
             </div>
           </div>
         )}

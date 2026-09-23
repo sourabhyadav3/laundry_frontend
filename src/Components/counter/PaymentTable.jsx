@@ -19,7 +19,7 @@ const PaymentTable = ({ payments, onView }) => {
             <span className="font-mono">{formatCurrency(row.amount)}</span>
             {showDetails && (
               <div className="flex flex-col mt-0.5">
-                <span className="text-[10px] text-secondary font-medium">Total: {formatCurrency(row.orderTotal)}</span>
+                <span className="text-[10px] text-secondary font-bold">Total: {formatCurrency(row.orderTotal)}</span>
                 {due > 0 && (
                   <span className="text-[10px] text-rose-500 font-bold">Due: {formatCurrency(due)}</span>
                 )}

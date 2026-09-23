@@ -5,25 +5,28 @@ import { AdminStateContext } from '../../context/AdminStateContext';
 import PickupTable from '../../Components/delivery/PickupTable';
 import DeliveryDetailsModal from '../../Components/delivery/DeliveryDetailsModal';
 
-const DEFAULT_STAFF = 'Frank Brown';
-
 const AssignedPickups = () => {
-  const { pickups, orders, updatePickupStatus } = useContext(AdminStateContext);
+  const { pickups, orders, customers = [], updatePickupStatus } = useContext(AdminStateContext);
   const [searchTerm, setSearchTerm] = useState('');
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
   const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const staffName = storedUser?.name || DEFAULT_STAFF;
+  const staffName = storedUser?.name || '';
+  const staffUsername = storedUser?.username || '';
 
   const filtered = useMemo(
     () =>
       pickups
         .filter((p) => {
-          if (!staffName) return true;
-          const assigned = (p.assignedStaff || '').toLowerCase();
-          const target = (staffName || '').toLowerCase();
-          return !assigned || assigned === target || assigned.includes(target) || target.includes(assigned);
+          const assigned = (p.assignedStaff || '').trim().toLowerCase();
+          if (!assigned) return false;
+          const targetName = staffName.trim().toLowerCase();
+          const targetUsername = staffUsername.trim().toLowerCase();
+          return (
+            (targetName && (assigned === targetName || assigned.includes(targetName) || targetName.includes(assigned))) ||
+            (targetUsername && (assigned === targetUsername || assigned.includes(targetUsername) || targetUsername.includes(assigned)))
+          );
         })
         .filter(
           (p) =>
@@ -31,10 +34,23 @@ const AssignedPickups = () => {
             (p.pickupId || '').toLowerCase().includes(searchTerm.toLowerCase())
         )
         .map(p => {
-          // If pickup has an orderNumber, find the order to get serviceType
           const order = p.orderNumber ? orders.find(o => o.number === p.orderNumber) : null;
+          const customerMatch = customers.find(c => 
+            (c.name && p.customer && c.name.trim().toLowerCase() === p.customer.trim().toLowerCase()) ||
+            (c.phone && p.contactNumber && c.phone === p.contactNumber) ||
+            (order && (c._id === order.customer || c.id === order.customer || c.id === order.customerId || c._id === order.customerId))
+          );
+
           return {
             ...p,
+            areaName: p.areaName || customerMatch?.areaName || order?.areaName || '',
+            partNo: p.partNo || customerMatch?.partNo || order?.partNo || '',
+            street: p.street || customerMatch?.street || order?.street || '',
+            jadda: p.jadda || customerMatch?.jadda || order?.jadda || '',
+            houseNo: p.houseNo || customerMatch?.houseNo || order?.houseNo || '',
+            levelNo: p.levelNo || customerMatch?.levelNo || order?.levelNo || '',
+            flatNo: p.flatNo || customerMatch?.flatNo || order?.flatNo || '',
+            paciNo: p.paciNo || customerMatch?.paciNo || order?.paciNo || '',
             serviceType: order ? order.serviceType : p.serviceType
           };
         })
@@ -44,7 +60,7 @@ const AssignedPickups = () => {
           }
           return String(b.pickupId || '').localeCompare(String(a.pickupId || ''), undefined, { numeric: true, sensitivity: 'base' });
         }),
-    [pickups, orders, searchTerm, staffName]
+    [pickups, orders, customers, searchTerm, staffName, staffUsername]
   );
 
   return (

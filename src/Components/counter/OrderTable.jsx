@@ -1,11 +1,11 @@
 import React, { useContext } from 'react';
-import { FiEye, FiRefreshCw } from 'react-icons/fi';
+import { FiEye, FiRefreshCw, FiMenu } from 'react-icons/fi';
 import ReusableTable from '../ReusableTable';
 import { formatDate } from '../../utils/exportUtils';
 import { getOrderStatusStyle } from '../../constants/statusStyles';
 import { AdminStateContext } from '../../context/AdminStateContext';
 
-const OrderTable = ({ orders, onView, onUpdateStatus, selectedOrderIds, setSelectedOrderIds }) => {
+const OrderTable = ({ orders, onView, onUpdateStatus, selectedOrderIds, setSelectedOrderIds, onReorder }) => {
   const { catalog, branches } = useContext(AdminStateContext);
 
   const getBranchName = (branchIdOrName) => {
@@ -37,6 +37,15 @@ const OrderTable = ({ orders, onView, onUpdateStatus, selectedOrderIds, setSelec
     return {};
   };
   const columns = [
+    ...(onReorder ? [{
+      header: '',
+      accessor: 'dragHandle',
+      cell: () => (
+        <div className="cursor-grab active:cursor-grabbing text-muted hover:text-primary p-1 inline-flex items-center justify-center transition" title="Drag to reorder invoice">
+          <FiMenu size={16} />
+        </div>
+      )
+    }] : []),
     ...(setSelectedOrderIds ? [{
       header: (
         <input
@@ -218,7 +227,7 @@ const OrderTable = ({ orders, onView, onUpdateStatus, selectedOrderIds, setSelec
     },
   ];
 
-  return <ReusableTable columns={columns} data={orders} getRowStyle={getRowStyle} onRowClick={onView} />;
+  return <ReusableTable columns={columns} data={orders} getRowStyle={getRowStyle} onRowClick={onView} onReorder={onReorder} />;
 };
 
 export default OrderTable;

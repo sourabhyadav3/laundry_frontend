@@ -238,7 +238,7 @@ const DashboardOverview = () => {
                             return <span className="text-primary font-medium">{sName}</span>;
                           })()}
                         </td>
-                        <td className="px-4 py-3 text-xs text-primary whitespace-nowrap">{formatCurrency(order.totalAmount)}</td>
+                        <td className="px-4 py-3 text-xs font-bold text-primary whitespace-nowrap">{formatCurrency(order.totalAmount)}</td>
                         <td className="px-4 py-3 text-xs text-secondary whitespace-nowrap">{formatDate(order.date)}</td>
                         <td className="px-4 py-3 text-xs whitespace-nowrap">
                           <span className={`status-pill border text-[10px] py-1 px-2.5 ${getOrderStatusStyle(order.status)}`}>

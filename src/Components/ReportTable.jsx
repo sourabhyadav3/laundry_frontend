@@ -191,19 +191,26 @@ const ReportTable = ({
         <table ref={tableRef} className="min-w-full">
           <thead className="bg-surface-alt">
             <tr>
-              {columns.map((col) => (
-                <th
-                  key={col.key}
-                  className="cursor-pointer px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-muted whitespace-nowrap"
-                  onClick={() => col.sortable !== false && handleSort(col.key)}
-                >
-                  <span className="inline-flex items-center gap-1">
-                    {col.label}
-                    {sortKey === col.key &&
-                      (sortDir === 'asc' ? <FiChevronUp size={14} /> : <FiChevronDown size={14} />)}
-                  </span>
-                </th>
-              ))}
+              {columns.map((col) => {
+                const labelText = typeof col.label === 'string' ? col.label : (typeof col.header === 'string' ? col.header : '');
+                const isTotal = /total|amount|إجمالي|المجموع/i.test(labelText) || /total|amount/i.test(String(col.key || col.accessor || ''));
+                return (
+                  <th
+                    key={col.key}
+                    className={`cursor-pointer px-5 py-4 text-left text-xs uppercase tracking-[0.2em] whitespace-nowrap ${
+                      isTotal ? 'font-extrabold text-primary text-[13px]' : 'font-semibold text-muted'
+                    }`}
+                    style={isTotal ? { fontWeight: 800 } : undefined}
+                    onClick={() => col.sortable !== false && handleSort(col.key)}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {col.label}
+                      {sortKey === col.key &&
+                        (sortDir === 'asc' ? <FiChevronUp size={14} /> : <FiChevronDown size={14} />)}
+                    </span>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -213,8 +220,14 @@ const ReportTable = ({
                   {columns.map((col) => {
                     const raw = row[col.key];
                     const value = col.format ? col.format(raw, row) : raw;
+                    const labelText = typeof col.label === 'string' ? col.label : (typeof col.header === 'string' ? col.header : '');
+                    const isTotal = /total|amount|إجمالي|المجموع/i.test(labelText) || /total|amount/i.test(String(col.key || col.accessor || ''));
                     return (
-                      <td key={col.key} className="px-5 py-4 text-sm text-primary whitespace-nowrap">
+                      <td
+                        key={col.key}
+                        className={`px-5 py-4 whitespace-nowrap ${isTotal ? 'font-extrabold text-[15px] text-primary font-mono' : 'text-sm text-primary'}`}
+                        style={isTotal ? { fontWeight: 800, fontSize: '15px' } : undefined}
+                      >
                         {value}
                       </td>
                     );

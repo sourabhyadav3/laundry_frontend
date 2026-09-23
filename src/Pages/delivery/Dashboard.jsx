@@ -8,13 +8,12 @@ import StatsCard from '../../Components/StatsCard';
 import { formatDate } from '../../utils/exportUtils';
 import { pickupStatusStyles, deliveryStatusStyles } from '../../constants/statusStyles';
 
-const DEFAULT_STAFF = 'Frank Brown';
-
 const DeliveryDashboard = () => {
   const { pickups, deliveries } = useContext(AdminStateContext);
   const { t } = useLanguage();
   const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const staffName = storedUser?.name || DEFAULT_STAFF;
+  const staffName = storedUser?.name || '';
+  const staffUsername = storedUser?.username || '';
   const today = new Date().toISOString().split('T')[0];
 
   const userRole = storedUser.role || '';
@@ -56,14 +55,33 @@ const DeliveryDashboard = () => {
 
   const allowedPermissions = getPermissionsForRole(userRole);
 
-  const myPickups = useMemo(
-    () => pickups.filter((p) => p.assignedStaff === staffName),
-    [pickups, staffName]
-  );
-  const myDeliveries = useMemo(
-    () => deliveries.filter((d) => d.assignedStaff === staffName),
-    [deliveries, staffName]
-  );
+  const myPickups = useMemo(() => {
+    const isStaffMatch = (assigned) => {
+      const a = (assigned || '').trim().toLowerCase();
+      if (!a) return false;
+      const targetName = staffName.trim().toLowerCase();
+      const targetUsername = staffUsername.trim().toLowerCase();
+      return (
+        (targetName && (a === targetName || a.includes(targetName) || targetName.includes(a))) ||
+        (targetUsername && (a === targetUsername || a.includes(targetUsername) || targetUsername.includes(a)))
+      );
+    };
+    return pickups.filter((p) => isStaffMatch(p.assignedStaff));
+  }, [pickups, staffName, staffUsername]);
+
+  const myDeliveries = useMemo(() => {
+    const isStaffMatch = (assigned) => {
+      const a = (assigned || '').trim().toLowerCase();
+      if (!a) return false;
+      const targetName = staffName.trim().toLowerCase();
+      const targetUsername = staffUsername.trim().toLowerCase();
+      return (
+        (targetName && (a === targetName || a.includes(targetName) || targetName.includes(a))) ||
+        (targetUsername && (a === targetUsername || a.includes(targetUsername) || targetUsername.includes(a)))
+      );
+    };
+    return deliveries.filter((d) => isStaffMatch(d.assignedStaff));
+  }, [deliveries, staffName, staffUsername]);
 
   const metrics = useMemo(() => {
     const completedJobs = [

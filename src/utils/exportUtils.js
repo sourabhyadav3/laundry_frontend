@@ -1286,6 +1286,36 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
               <span class="info-label">Delivery Type / نوع التوصيل:</span>
               <span class="info-value">${translatedDeliveryType.en} / <span style="direction: rtl;">${translatedDeliveryType.ar}</span></span>
             </div>
+            ${(() => {
+              const area = customerObj?.areaName || order?.areaName || '';
+              const part = customerObj?.partNo || order?.partNo || '';
+              const street = customerObj?.street || order?.street || '';
+              const jadda = customerObj?.jadda || order?.jadda || '';
+              const house = customerObj?.houseNo || order?.houseNo || '';
+              const level = customerObj?.levelNo || order?.levelNo || '';
+              const flat = customerObj?.flatNo || order?.flatNo || '';
+              const paci = customerObj?.paciNo || order?.paciNo || '';
+              const notes = customerObj?.addressNotes || order?.addressNotes || order?.address || '';
+
+              const parts = [];
+              if (area) parts.push(`Area: ${area}`);
+              if (part) parts.push(`Block: ${part}`);
+              if (street) parts.push(`S: ${street}`);
+              if (jadda) parts.push(`Jadah: ${jadda}`);
+              if (house) parts.push(`House: ${house}`);
+              if (level) parts.push(`F: ${level}`);
+              if (flat) parts.push(`Flat: ${flat}`);
+              if (paci) parts.push(`PACI: ${paci}`);
+              if (parts.length === 0 && notes) parts.push(notes);
+
+              if (parts.length === 0) return '';
+              return `
+                <div class="info-row" style="background-color: #f8fafc; border: 1px solid #cbd5e1; padding: 2px 4px; border-radius: 4px; margin: 2px 0;">
+                  <span class="info-label" style="font-weight: 800;">Address / العنوان:</span>
+                  <span class="info-value" style="font-weight: 700; font-size: 8.5px; line-height: 1.3;">${parts.join(' | ')}</span>
+                </div>
+              `;
+            })()}
             ${(order?.packaging === 'Folded' || order?.packaging === 'Fold') ? `
             <div class="info-row" style="background-color: #f3e8ff; border: 1.5px dashed #7e22ce; padding: 2px 4px; border-radius: 4px; margin: 3px 0; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
               <span class="info-label" style="color: #6b21a8 !important; font-weight: 800;">Packaging / التجهيز:</span>
@@ -1820,7 +1850,7 @@ export const generateCustomerStatementPDF = (customer, customerOrders = [], stat
         <td style="padding: 5px 3px; font-size: 10px; border-bottom: 1px dashed #ddd; font-family: monospace;">${orderNum}</td>
         <td style="padding: 5px 3px; font-size: 10px; border-bottom: 1px dashed #ddd;">${orderDate}</td>
         <td style="padding: 5px 3px; font-size: 10px; border-bottom: 1px dashed #ddd; text-align: center;">${itemsCount}</td>
-        <td style="padding: 5px 3px; font-size: 10px; border-bottom: 1px dashed #ddd; font-family: monospace; text-align: right;">${formatCurrency(total)}</td>
+        <td style="padding: 5px 3px; font-size: 10px; border-bottom: 1px dashed #ddd; font-family: monospace; text-align: right; font-weight: 700;">${formatCurrency(total)}</td>
         <td style="padding: 5px 3px; font-size: 10px; border-bottom: 1px dashed #ddd; font-family: monospace; text-align: right; color: ${due > 0 ? '#b91c1c' : '#047857'}; font-weight: 700;">${due > 0 ? formatCurrency(due) : '0.000'}</td>
         <td style="padding: 5px 3px; font-size: 9.5px; border-bottom: 1px dashed #ddd; text-align: right;">${status} (${payStatus})</td>
       </tr>
@@ -3387,7 +3417,7 @@ export const generateSettlementReceiptPDF = (customer, settlementData = {}, opti
   const ordersRowsHtml = settledOrders.length > 0 ? settledOrders.map((ord, idx) => `
     <tr>
       <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; font-family: monospace; font-weight: 700;">${ord.orderNumber || `Order #${idx + 1}`}</td>
-      <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; text-align: right; font-family: monospace;">${formatCurrency(ord.orderTotal || 0)}</td>
+      <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; text-align: right; font-family: monospace; font-weight: 700;">${formatCurrency(ord.orderTotal || 0)}</td>
       <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; text-align: right; font-family: monospace; font-weight: 700; color: #047857;">${formatCurrency(ord.amountApplied || 0)}</td>
       <td style="padding: 4px 2px; font-size: 9.5px; border-bottom: 1px dashed #ddd; text-align: right; font-family: monospace; color: ${ord.remainingDue > 0 ? '#b91c1c' : '#047857'}; font-weight: 700;">${formatCurrency(ord.remainingDue || 0)}</td>
     </tr>
