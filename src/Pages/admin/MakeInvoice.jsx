@@ -95,10 +95,14 @@ const MakeInvoice = () => {
     // Basic Page State
     const [form, setForm] = useState(() => {
         const saved = localStorage.getItem('admin_draft_invoice_form');
+        const d = new Date();
+        d.setDate(d.getDate() + 3);
+        const defaultDeliveryDate = d.toISOString().split('T')[0];
+
         const defaults = {
             customerId: '',
             phoneSearch: '',
-            expectedDeliveryDate: '',
+            expectedDeliveryDate: defaultDeliveryDate,
             expectedDeliveryTime: '',
             notes: '',
             paperInvNo: '',
@@ -106,17 +110,28 @@ const MakeInvoice = () => {
             discountPercent: 0,
             discountValue: 0,
             useFreeBalance: false,
-            deliveryMode: 'branch',
+            deliveryMode: 'home',
             packaging: 'Normal', // 'Normal' (Hanger) | 'Folded' (Fold)
         };
         if (!saved) return defaults;
-        const parsed = JSON.parse(saved);
-        return {
-            ...defaults,
-            ...parsed,
-            deliveryMode: 'branch',
-            packaging: parsed.packaging || 'Normal',
-        };
+        try {
+            const parsed = JSON.parse(saved);
+            return {
+                ...defaults,
+                ...parsed,
+                customerId: '',
+                phoneSearch: '',
+                discountChecked: false,
+                discountPercent: 0,
+                discountValue: 0,
+                useFreeBalance: false,
+                deliveryMode: 'home',
+                expectedDeliveryDate: parsed.expectedDeliveryDate || defaultDeliveryDate,
+                packaging: parsed.packaging || 'Normal',
+            };
+        } catch (e) {
+            return defaults;
+        }
     });
 
     const getInitialQuickCustomerForm = (query = '') => {
@@ -570,7 +585,33 @@ const MakeInvoice = () => {
     const customerDropdownRef = useRef(null);
 
     useEffect(() => {
-        localStorage.setItem('admin_draft_invoice_form', JSON.stringify(form));
+        try {
+            const saved = localStorage.getItem('admin_draft_invoice_form');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                parsed.customerId = '';
+                parsed.phoneSearch = '';
+                parsed.discountChecked = false;
+                parsed.discountPercent = 0;
+                parsed.discountValue = 0;
+                parsed.useFreeBalance = false;
+                localStorage.setItem('admin_draft_invoice_form', JSON.stringify(parsed));
+            }
+        } catch (e) {}
+    }, []);
+
+    useEffect(() => {
+        // Save form draft but omit customer details so customer is always clean by default
+        const draftForm = {
+            ...form,
+            customerId: '',
+            phoneSearch: '',
+            discountChecked: false,
+            discountPercent: 0,
+            discountValue: 0,
+            useFreeBalance: false,
+        };
+        localStorage.setItem('admin_draft_invoice_form', JSON.stringify(draftForm));
     }, [form]);
 
     useEffect(() => {
@@ -750,6 +791,20 @@ const MakeInvoice = () => {
             discountPercent: hasDiscount ? discountVal : 0,
             discountValue: 0,
             deliveryMode: newDeliveryMode,
+        }));
+        setCustomerSearchQuery('');
+        setShowSearchResults(false);
+    };
+
+    const handleClearCustomer = () => {
+        setForm((prev) => ({
+            ...prev,
+            customerId: '',
+            phoneSearch: '',
+            discountChecked: false,
+            discountPercent: 0,
+            discountValue: 0,
+            useFreeBalance: false,
         }));
         setCustomerSearchQuery('');
         setShowSearchResults(false);
@@ -937,17 +992,23 @@ const MakeInvoice = () => {
         setOrderItems((prev) => {
             const next = prev.filter((_, i) => i !== idx);
             if (next.length === 0) {
-                setForm((f) => ({ ...f, deliveryMode: 'branch', expectedDeliveryDate: '', expectedDeliveryTime: '' }));
+                const d = new Date();
+                d.setDate(d.getDate() + 3);
+                const defaultDeliveryDate = d.toISOString().split('T')[0];
+                setForm((f) => ({ ...f, deliveryMode: 'home', expectedDeliveryDate: defaultDeliveryDate, expectedDeliveryTime: '' }));
             }
             return next;
         });
     };
 
     const handleReset = () => {
+        const d = new Date();
+        d.setDate(d.getDate() + 3);
+        const defaultDeliveryDate = d.toISOString().split('T')[0];
         setForm({
             customerId: '',
             phoneSearch: '',
-            expectedDeliveryDate: '',
+            expectedDeliveryDate: defaultDeliveryDate,
             expectedDeliveryTime: '',
             notes: '',
             paperInvNo: '',
@@ -955,7 +1016,7 @@ const MakeInvoice = () => {
             discountPercent: 0,
             discountValue: 0,
             useFreeBalance: false,
-            deliveryMode: 'branch',
+            deliveryMode: 'home',
         });
         setOrderItems([]);
         setCustomerSearchQuery('');
@@ -2035,13 +2096,23 @@ const MakeInvoice = () => {
                                         setCustomerSearchQuery('');
                                     }
                                 }}
-                                className={`w-full text-xs rounded-lg border bg-surface pl-8 pr-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400/40 ${
+                                className={`w-full text-xs rounded-lg border bg-surface pl-8 pr-7 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400/40 ${
                                     selectedCustomerObj && !showSearchResults && customerSearchQuery === ''
                                         ? 'border-emerald-400/60 text-primary font-medium'
                                         : 'border-border'
                                 }`}
                             />
                             <FiSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 text-secondary text-sm pointer-events-none" />
+                            {selectedCustomerObj && (
+                                <button
+                                    type="button"
+                                    onClick={handleClearCustomer}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-secondary hover:text-rose-500 text-xs font-bold p-0.5"
+                                    title={language === 'ar' ? 'إلغاء التحديد' : 'Clear Customer'}
+                                >
+                                    ✕
+                                </button>
+                            )}
                         </div>
 
                         {/* Live Autocomplete Results */}
@@ -2107,9 +2178,19 @@ const MakeInvoice = () => {
                                         <div className="flex items-center gap-1.5 truncate">
                                             <span>{t('counter.makeInvoice.selectedLabel') || "Selected"}: <strong>{getCustomerDisplayName(selectedCustomerObj)}</strong> ({selectedCustomerObj.phone})</span>
                                         </div>
-                                        {isSub && (
-                                            <span className="text-amber-500 text-base shrink-0 select-none" title="Subscriber">⭐</span>
-                                        )}
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            {isSub && (
+                                                <span className="text-amber-500 text-base select-none" title="Subscriber">⭐</span>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={handleClearCustomer}
+                                                className="text-[11px] font-bold text-rose-500 hover:text-rose-700 bg-rose-500/10 hover:bg-rose-500/20 px-1.5 py-0.5 rounded transition cursor-pointer"
+                                                title={language === 'ar' ? 'إلغاء التحديد' : 'Clear Customer'}
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
                                     </div>
                                     <p className={`text-[11px] font-bold ${Number(selectedCustomerObj.balance || 0) > 0 ? 'text-rose-600 bg-rose-500/10 px-1.5 py-0.5 rounded inline-block border border-rose-500/10' : 'text-secondary'}`}>
                                         {t('counter.makeInvoice.dueBalance')}: {formatCurrency(selectedCustomerObj.balance || 0)}
@@ -2389,8 +2470,11 @@ const MakeInvoice = () => {
                         <button
                             type="button"
                             onClick={() => {
+                                const d = new Date();
+                                d.setDate(d.getDate() + 3);
+                                const defaultDeliveryDate = d.toISOString().split('T')[0];
                                 setOrderItems([]);
-                                setForm((prev) => ({ ...prev, deliveryMode: 'branch', expectedDeliveryDate: '', expectedDeliveryTime: '' }));
+                                setForm((prev) => ({ ...prev, deliveryMode: 'home', expectedDeliveryDate: defaultDeliveryDate, expectedDeliveryTime: '' }));
                                 localStorage.removeItem('admin_draft_invoice_items');
                             }}
                             className="text-[10px] text-rose-500 hover:text-rose-600 font-semibold uppercase tracking-wider"

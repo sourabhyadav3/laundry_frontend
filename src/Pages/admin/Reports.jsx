@@ -9,6 +9,7 @@ import {
   FiDollarSign,
   FiChevronDown,
   FiSearch,
+  FiPrinter,
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import api from '../../utils/api';
@@ -28,7 +29,7 @@ import {
   getDateRange,
 } from '../../utils/reportAnalytics';
 import { ORDER_STATUSES } from '../../constants/statusStyles';
-import { exportToPDF, exportToCSV, formatCurrency, formatDate, generateShiftSettlementPDF } from '../../utils/exportUtils';
+import { exportToPDF, exportToCSV, formatCurrency, formatDate, generateShiftSettlementPDF, generateSubscriberTwoPagePDF, generateDriverDailyReportPDF } from '../../utils/exportUtils';
 
 const REPORT_EXPORT_COLUMNS = [
   { key: 'number', label: 'Order #' },
@@ -79,7 +80,8 @@ const REPORT_TYPES = {
   customers: [
     { id: 'customer_list', label: 'Customer Directory', labelAr: 'قائمة العملاء' },
     { id: 'top_customers', label: 'Top Purchasing Customers', labelAr: 'العملاء الأكثر شراءً' },
-    { id: 'customer_debts', label: 'Outstanding Customer Debts', labelAr: 'مديونيات العملاء' }
+    { id: 'customer_debts', label: 'Outstanding Customer Debts', labelAr: 'مديونيات العملاء' },
+    { id: 'subscriber_report', label: 'Subscribers & Unsubscribers (2-Page)', labelAr: 'تقرير المشتركين وغير المشتركين (صفحتين)' }
   ],
   areas: [
     { id: 'area_sales', label: 'Area Sales & Customer Distribution', labelAr: 'المبيعات وتوزيع العملاء حسب المناطق' }
@@ -88,10 +90,13 @@ const REPORT_TYPES = {
     { id: 'shift_settlement', label: 'Shift Closeout & Bank Deposit', labelAr: 'تقرير إغلاق الوردية والإيداع البنكي' }
   ],
   logistics: [
+    { id: 'driver_daily_report', label: 'Driver Daily Work Report', labelAr: 'التقرير اليومي لعمل السائقين' },
+    { id: 'home_delivery_report', label: 'Home Delivery Report (Paid / Unpaid)', labelAr: 'تقرير التوصيل المنزلي (المدفوع وغير المدفوع)' },
     { id: 'completed_jobs', label: 'Completed Deliveries / Pickups', labelAr: 'المهام اللوجستية المكتملة' },
     { id: 'pending_jobs', label: 'Pending / Out for Delivery', labelAr: 'المهام اللوجستية المعلقة' }
   ],
   staff: [
+    { id: 'driver_daily_report', label: 'Driver Daily Work Report', labelAr: 'التقرير اليومي لعمل السائقين' },
     { id: 'user_sales', label: 'Staff Sales & Customer Acquisition', labelAr: 'مبيعات واكتساب العملاء للموظفين' },
     { id: 'driver_income', label: 'Drivers Income & Deliveries', labelAr: 'دخل وأداء السائقين' },
     { id: 'workshop_perf', label: 'Workshop Staff Performance', labelAr: 'أداء موظفي الورشة (غسيل وكي وخياطة)' }
@@ -133,6 +138,26 @@ const Reports = () => {
     if (!stepReportType) return [];
     
     switch (stepReportType) {
+      case 'driver_daily_report':
+        return [
+          { value: 'All', label: language === 'ar' ? 'جميع السائقين' : 'All Drivers' },
+          ...(drivers || []).map(d => ({ value: d.driverName, label: `${d.driverName} (${d.branch || 'Home Service'})` }))
+        ];
+      case 'home_delivery_report':
+        return [
+          { value: 'All', label: language === 'ar' ? 'جميع الطلبات (مدفوع وغير مدفوع)' : 'All Orders (Paid & Unpaid)' },
+          { value: 'Paid', label: language === 'ar' ? 'المدفوعة فقط (Paid)' : 'Paid Only' },
+          { value: 'Unpaid', label: language === 'ar' ? 'غير المدفوعة فقط (Unpaid)' : 'Unpaid Only' },
+          { value: 'Partial', label: language === 'ar' ? 'المدفوعة جزئياً (Partial)' : 'Partial Paid' },
+          { value: 'Subscribed', label: language === 'ar' ? 'المشتركين فقط (Subscribed)' : 'Subscribed Customers' },
+          { value: 'Unsubscribed', label: language === 'ar' ? 'غير المشتركين (Unsubscribed)' : 'Unsubscribed Customers' }
+        ];
+      case 'subscriber_report':
+        return [
+          { value: 'All', label: language === 'ar' ? 'تقرير صفحتين (مشتركين + غير مشتركين)' : '2-Page Report (Subscribed + Unsubscribed)' },
+          { value: 'Subscribed', label: language === 'ar' ? 'الصفحة 1: المشتركين فقط' : 'Page 1: Subscribed Only' },
+          { value: 'Unsubscribed', label: language === 'ar' ? 'الصفحة 2: غير المشتركين فقط' : 'Page 2: Unsubscribed Only' }
+        ];
       case 'user_sales':
       case 'workshop_perf':
         return [
@@ -191,21 +216,132 @@ const Reports = () => {
     }
   };
 
-  const handleGenerateReport = async () => {
-    if (!stepCategory || !stepReportType) {
+  const handleGenerateReport = async (catOverride, typeOverride, paramOverride) => {
+    const activeCategory = catOverride || stepCategory;
+    const activeReportType = typeOverride || stepReportType;
+    const activeParameter = paramOverride !== undefined ? paramOverride : stepParameter;
+
+    if (!activeCategory || !activeReportType) {
       toast.warning(language === 'ar' ? 'يرجى اختيار الفئة ونوع التقرير' : 'Please select a Category and Report Type');
       return;
     }
 
-    const categoryObj = CATEGORIES.find(c => c.id === stepCategory);
-    const reportTypeObj = REPORT_TYPES[stepCategory]?.find(r => r.id === stepReportType);
+    if (catOverride) setStepCategory(catOverride);
+    if (typeOverride) setStepReportType(typeOverride);
+    if (paramOverride !== undefined) setStepParameter(paramOverride);
+
+    const categoryObj = CATEGORIES.find(c => c.id === activeCategory) || { label: 'Report', labelAr: 'تقرير' };
+    const reportTypeObj = (REPORT_TYPES[activeCategory] || []).find(r => r.id === activeReportType) || { label: activeReportType, labelAr: activeReportType };
     const titleEn = `${categoryObj.label} - ${reportTypeObj.label}`;
     const titleAr = `${categoryObj.labelAr} - ${reportTypeObj.labelAr}`;
     const title = language === 'ar' ? titleAr : titleEn;
 
     let columns = [];
     
-    switch (stepReportType) {
+    switch (activeReportType) {
+      case 'driver_daily_report':
+        columns = [
+          { header: language === 'ar' ? 'اسم السائق' : 'Driver Name', accessor: 'driverName' },
+          { header: language === 'ar' ? 'الفرع' : 'Branch', accessor: 'branch' },
+          { header: language === 'ar' ? 'التاريخ' : 'Date', accessor: 'date' },
+          { header: language === 'ar' ? 'إجمالي البيك اب المخصص' : 'Pickup Assigned', accessor: 'totalPickups' },
+          { 
+            header: language === 'ar' ? 'بيك اب مكتمل' : 'Pickup Completed', 
+            accessor: 'pickupsCompleted',
+            format: (val) => <span className="font-semibold text-emerald-600">{val}</span>
+          },
+          { 
+            header: language === 'ar' ? 'بيك اب معلق' : 'Pickup Pending', 
+            accessor: 'pickupsPending',
+            format: (val) => <span className={`font-semibold ${val > 0 ? 'text-amber-600' : 'text-secondary'}`}>{val}</span>
+          },
+          { header: language === 'ar' ? 'إجمالي التوصيل المخصص' : 'Delivery Assigned', accessor: 'totalDeliveries' },
+          { 
+            header: language === 'ar' ? 'توصيل مكتمل' : 'Delivery Completed', 
+            accessor: 'deliveriesCompleted',
+            format: (val) => <span className="font-semibold text-emerald-600">{val}</span>
+          },
+          { 
+            header: language === 'ar' ? 'توصيل معلق (Pending Delivery)' : 'Delivery Pending', 
+            accessor: 'deliveriesPending',
+            format: (val) => (
+              <span className={`px-2.5 py-0.5 rounded-full font-bold text-xs ${val > 0 ? 'bg-rose-500/15 text-rose-600 border border-rose-500/30' : 'text-secondary'}`}>
+                {val}
+              </span>
+            )
+          },
+          { header: language === 'ar' ? 'إجمالي المهام' : 'Total Tasks', accessor: 'totalTasks' },
+          { 
+            header: language === 'ar' ? 'المهام المكتملة' : 'Completed Tasks', 
+            accessor: 'completedTasks',
+            format: (val) => <span className="font-bold text-emerald-600">{val}</span>
+          },
+          { 
+            header: language === 'ar' ? 'المهام المعلقة' : 'Pending Tasks', 
+            accessor: 'pendingTasks',
+            format: (val) => <span className={`font-bold ${val > 0 ? 'text-rose-600' : 'text-secondary'}`}>{val}</span>
+          },
+        ];
+        break;
+      case 'home_delivery_report':
+        columns = [
+          { header: language === 'ar' ? 'التاريخ' : 'Date', accessor: 'date', format: (val) => formatDate(val) },
+          { header: language === 'ar' ? 'اسم العميل' : 'Customer Name', accessor: 'customerName' },
+          { header: language === 'ar' ? 'رقم العميل / التسجيل' : 'Customer ID / Reg', accessor: 'customerId' },
+          { header: language === 'ar' ? 'رقم الفاتورة' : 'Invoice Number', accessor: 'invoiceNumber' },
+          { 
+            header: language === 'ar' ? 'حالة الدفع (Paid / Unpaid)' : 'Payment Status', 
+            accessor: 'paymentStatus',
+            format: (val, row) => {
+              const raw = row?.paymentStatusRaw || val;
+              if (raw === 'Paid') {
+                return <span className="px-2.5 py-1 rounded-full font-bold text-xs bg-emerald-500/15 text-emerald-600 border border-emerald-500/30">Paid</span>;
+              } else if (raw === 'Partial') {
+                return <span className="px-2.5 py-1 rounded-full font-bold text-xs bg-amber-500/15 text-amber-600 border border-amber-500/30">{val}</span>;
+              } else {
+                return <span className="px-2.5 py-1 rounded-full font-bold text-xs bg-rose-500/15 text-rose-600 border border-rose-500/30">Unpaid</span>;
+              }
+            }
+          },
+          { header: language === 'ar' ? 'إجمالي المبلغ' : 'Total Amount', accessor: 'totalAmount', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'المبلغ المتبقي' : 'Unpaid Balance', accessor: 'unpaidAmount', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'تفاصيل التوصيل والمندوب' : 'Home Delivery Details', accessor: 'homeDeliveryDetails' },
+          { 
+            header: language === 'ar' ? 'حالة الاشتراك' : 'Subscription Status', 
+            accessor: 'subscriptionStatus',
+            format: (val, row) => row?.isSubscriber
+              ? <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-600 border border-amber-500/30">Subscribed ⭐</span>
+              : <span className="px-2 py-0.5 rounded-full text-xs text-secondary">Unsubscribed</span>
+          },
+        ];
+        break;
+      case 'subscriber_report':
+        columns = [
+          { 
+            header: language === 'ar' ? 'الصفحة / التصنيف' : 'Page / Section', 
+            accessor: 'pageSection',
+            format: (val, row) => (
+              <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${row?.isSubscriber ? 'bg-amber-500/15 text-amber-600' : 'bg-surface-alt text-secondary border border-border'}`}>
+                {val}
+              </span>
+            )
+          },
+          { header: language === 'ar' ? 'رقم العميل' : 'Customer ID', accessor: 'customerId' },
+          { header: language === 'ar' ? 'اسم العميل' : 'Customer Name', accessor: 'name' },
+          { header: language === 'ar' ? 'الهاتف' : 'Phone', accessor: 'phone' },
+          { header: language === 'ar' ? 'المنطقة' : 'Area', accessor: 'area' },
+          { 
+            header: language === 'ar' ? 'حالة الاشتراك' : 'Subscription Status', 
+            accessor: 'subscriptionStatus',
+            format: (val, row) => row?.isSubscriber
+              ? <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-600 border border-amber-500/30">Subscribed ⭐</span>
+              : <span className="px-2 py-0.5 rounded-full text-xs text-secondary">Unsubscribed</span>
+          },
+          { header: language === 'ar' ? 'إجمالي الطلبات' : 'Total Orders', accessor: 'totalOrders' },
+          { header: language === 'ar' ? 'إجمالي الإنفاق' : 'Total Spent', accessor: 'totalSpent', format: (val) => formatCurrency(val) },
+          { header: language === 'ar' ? 'الرصيد المستحق' : 'Balance Due', accessor: 'balance', format: (val) => formatCurrency(val) },
+        ];
+        break;
       case 'total_sales':
         columns = [
           { header: language === 'ar' ? 'التاريخ' : 'Date', accessor: 'date', format: (val) => formatDate(val) },
@@ -382,9 +518,9 @@ const Reports = () => {
       
       const res = await api.get('/reports/generate', {
          params: { 
-           reportType: stepReportType, 
-           category: stepCategory, 
-           parameter: stepParameter, 
+           reportType: activeReportType, 
+           category: activeCategory, 
+           parameter: activeParameter, 
            start: sStr, 
            end: eStr,
            branchId: selectedBranch 
@@ -392,7 +528,7 @@ const Reports = () => {
       });
       
       let processedData = res.data.data;
-      if (stepReportType === 'user_sales' || stepReportType === 'driver_income') {
+      if (activeReportType === 'user_sales' || activeReportType === 'driver_income') {
         processedData = processedData.map(row => {
           const count = row.count || 0;
           const sales = row.sales || 0;
@@ -575,6 +711,103 @@ const Reports = () => {
             />
           </div>
         )}
+      </section>
+
+      {/* Quick Priority Reports */}
+      <section className="surface-card border border-border p-5 shadow-xl print:hidden space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-bold uppercase tracking-[0.25em] text-secondary">
+            ⚡ {language === 'ar' ? 'التقارير السريعة ذات الأولوية' : 'Priority Instant Reports'}
+          </p>
+          <span className="text-[11px] text-secondary">
+            {language === 'ar' ? 'انقر لتوليد التقرير فوراً مع فلتر التاريخ' : '1-Click instant generation with current date filter'}
+          </span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <button
+            type="button"
+            onClick={() => handleGenerateReport('logistics', 'driver_daily_report', 'All')}
+            className={`p-4 rounded-2xl border text-left transition-all hover:scale-[1.02] active:scale-[0.98] ${
+              stepReportType === 'driver_daily_report'
+                ? 'border-blue-500 bg-blue-500/10 shadow-sm'
+                : 'border-border bg-surface hover:bg-surface-alt'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-2xl">🚚</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-600">Daily</span>
+            </div>
+            <h4 className="mt-2 text-sm font-bold text-primary">
+              {language === 'ar' ? 'التقرير اليومي للسائقين' : 'Driver Daily Report'}
+            </h4>
+            <p className="mt-1 text-xs text-secondary line-clamp-2">
+              {language === 'ar' ? 'مهام البيك اب والتوصيل المخصصة، المكتملة، والمعلقة لكل سائق' : 'Assigned, completed & pending pickups/deliveries per driver'}
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleGenerateReport('logistics', 'home_delivery_report', 'All')}
+            className={`p-4 rounded-2xl border text-left transition-all hover:scale-[1.02] active:scale-[0.98] ${
+              stepReportType === 'home_delivery_report'
+                ? 'border-emerald-500 bg-emerald-500/10 shadow-sm'
+                : 'border-border bg-surface hover:bg-surface-alt'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-2xl">📦</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600">Paid/Unpaid</span>
+            </div>
+            <h4 className="mt-2 text-sm font-bold text-primary">
+              {language === 'ar' ? 'تقرير التوصيل المنزلي' : 'Home Delivery Report'}
+            </h4>
+            <p className="mt-1 text-xs text-secondary line-clamp-2">
+              {language === 'ar' ? 'فواتير التوصيل المنزلي، حالة الدفع (مدفوع / غير مدفوع)، والمشتركين' : 'Home delivery invoices, payment status (Paid/Unpaid) & addresses'}
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleGenerateReport('customers', 'subscriber_report', 'All')}
+            className={`p-4 rounded-2xl border text-left transition-all hover:scale-[1.02] active:scale-[0.98] ${
+              stepReportType === 'subscriber_report'
+                ? 'border-amber-500 bg-amber-500/10 shadow-sm'
+                : 'border-border bg-surface hover:bg-surface-alt'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-2xl">⭐</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600">2-Page</span>
+            </div>
+            <h4 className="mt-2 text-sm font-bold text-primary">
+              {language === 'ar' ? 'تقرير المشتركين وغير المشتركين' : 'Subscriber Report (2-Page)'}
+            </h4>
+            <p className="mt-1 text-xs text-secondary line-clamp-2">
+              {language === 'ar' ? 'تقرير صفحتين: صفحة 1 المشتركين، صفحة 2 غير المشتركين' : 'Page 1 Subscribed, Page 2 Unsubscribed customer directory'}
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleGenerateReport('shifts', 'shift_settlement', 'All Day')}
+            className={`p-4 rounded-2xl border text-left transition-all hover:scale-[1.02] active:scale-[0.98] ${
+              stepReportType === 'shift_settlement'
+                ? 'border-purple-500 bg-purple-500/10 shadow-sm'
+                : 'border-border bg-surface hover:bg-surface-alt'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-2xl">⏱️</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-600">Shift</span>
+            </div>
+            <h4 className="mt-2 text-sm font-bold text-primary">
+              {language === 'ar' ? 'إغلاق الوردية والإيداع' : 'Shift Settlement'}
+            </h4>
+            <p className="mt-1 text-xs text-secondary line-clamp-2">
+              {language === 'ar' ? 'تقرير الوردية الصباحية والمسائية وصافي الكاش للإيداع' : 'Daily shift closeout, cashier collections & net cash for deposit'}
+            </p>
+          </button>
+        </div>
       </section>
 
       {/* Step-by-Step Filtering Wizard */}
@@ -763,18 +996,40 @@ const Reports = () => {
         };
 
         const handleExportCustomPDF = () => {
+          const activeBranchName = selectedBranch !== 'All' ? selectedBranch : 'All Branches';
+          const activeDateStr = (datePreset === 'custom' && customStart && customEnd)
+            ? `${customStart} to ${customEnd}`
+            : (DATE_PRESETS.find(p => p.id === datePreset)?.label || datePreset);
+
+          if (stepReportType === 'subscriber_report') {
+            const ok = generateSubscriberTwoPagePDF(filteredData, activeBranchName);
+            if (ok) {
+              toast.success(language === 'ar' ? 'تم تصدير تقرير المشتركين (صفحتين) بصيغة PDF' : '2-Page Subscriber Report exported as PDF');
+              return;
+            }
+          }
+
+          if (stepReportType === 'driver_daily_report') {
+            const ok = generateDriverDailyReportPDF(filteredData, activeDateStr, activeBranchName);
+            if (ok) {
+              toast.success(language === 'ar' ? 'تم تصدير تقرير السائقين اليومي بصيغة PDF' : 'Driver Daily Report exported as PDF');
+              return;
+            }
+          }
+
           const totalRow = filteredData.find(d => d.isTotalRow) || filteredData[filteredData.length - 1] || {};
           const morningStaffStr = (totalRow.morningStaff && totalRow.morningStaff.length > 0) ? totalRow.morningStaff.join(', ') : 'None';
           const eveningStaffStr = (totalRow.eveningStaff && totalRow.eveningStaff.length > 0) ? totalRow.eveningStaff.join(', ') : 'None';
 
           const shiftSummaryLines = stepReportType === 'shift_settlement' ? [
-            `Date Range: ${DATE_PRESETS.find(p => p.id === datePreset)?.label || datePreset}`,
+            `Date Range: ${activeDateStr}`,
             `Morning Shift Staff: ${morningStaffStr}`,
             `Evening Shift Staff: ${eveningStaffStr}`,
             `Net Cash for Bank Deposit: ${formatCurrency(totalRow.netCashInHand || totalRow.cashCollected || 0)}`,
             `Total Records: ${filteredData.length}`
           ] : [
-            `Date Range Preset: ${DATE_PRESETS.find(p => p.id === datePreset)?.label || datePreset}`,
+            `Date Range: ${activeDateStr}`,
+            `Branch: ${activeBranchName}`,
             `Total Records: ${filteredData.length}`
           ];
 
@@ -809,6 +1064,15 @@ const Reports = () => {
                     <span>{language === 'ar' ? 'طباعة إيصال إغلاق الوردية' : 'Print Shift Closeout Voucher'}</span>
                   </button>
                 )}
+                {/* <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="dashboard-hero-pill flex items-center justify-center gap-1.5 text-xs font-semibold py-2 px-4 border border-border bg-surface hover:bg-surface-alt text-primary shadow-sm"
+                  title="Print this report"
+                >
+                  <FiPrinter size={14} />
+                  <span>{language === 'ar' ? 'طباعة' : 'Print'}</span>
+                </button> */}
                 <button
                   type="button"
                   onClick={handleExportCustomPDF}
@@ -828,17 +1092,117 @@ const Reports = () => {
               </div>
             </div>
 
-            {/* Results Table search */}
-            <div className="relative max-w-sm">
-              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" />
-              <input
-                type="text"
-                placeholder={language === 'ar' ? 'ابحث في النتائج...' : 'Filter custom results...'}
-                value={customSearch}
-                onChange={(e) => setCustomSearch(e.target.value)}
-                className="w-full text-xs rounded-xl border border-border bg-surface pl-9 pr-3 py-2 text-primary focus:outline-none focus:ring-2 focus:ring-blue-400/40"
-              />
+            {/* Results Table search and quick report sub-filters */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="relative w-full max-w-sm">
+                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" />
+                <input
+                  type="text"
+                  placeholder={language === 'ar' ? 'ابحث في النتائج...' : 'Filter custom results...'}
+                  value={customSearch}
+                  onChange={(e) => setCustomSearch(e.target.value)}
+                  className="w-full text-xs rounded-xl border border-border bg-surface pl-9 pr-3 py-2 text-primary focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                />
+              </div>
+
+              {stepReportType === 'home_delivery_report' && (
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  {[
+                    { id: 'All', label: language === 'ar' ? 'الكل' : 'All Orders' },
+                    { id: 'Paid', label: language === 'ar' ? 'المدفوعة (Paid)' : 'Paid Only' },
+                    { id: 'Unpaid', label: language === 'ar' ? 'غير المدفوعة (Unpaid)' : 'Unpaid Only' },
+                    { id: 'Partial', label: language === 'ar' ? 'مدفوعة جزئياً' : 'Partial' },
+                  ].map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => handleGenerateReport('logistics', 'home_delivery_report', m.id)}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition-all border ${
+                        stepParameter === m.id
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                          : 'bg-surface text-secondary border-border hover:bg-surface-alt hover:text-primary'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {stepReportType === 'subscriber_report' && (
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  {[
+                    { id: 'All', label: language === 'ar' ? 'الكل (تقرير صفحتين)' : 'All (2-Page Report)' },
+                    { id: 'Subscribed', label: language === 'ar' ? 'الصفحة 1: المشتركين ⭐' : 'Page 1: Subscribed ⭐' },
+                    { id: 'Unsubscribed', label: language === 'ar' ? 'الصفحة 2: غير المشتركين' : 'Page 2: Unsubscribed' },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => handleGenerateReport('customers', 'subscriber_report', tab.id)}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition-all border ${
+                        stepParameter === tab.id
+                          ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
+                          : 'bg-surface text-secondary border-border hover:bg-surface-alt hover:text-primary'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
+
+            {/* Driver Daily Report Summary Banner (Requirement 1) */}
+            {stepReportType === 'driver_daily_report' && (() => {
+              const totalRow = filteredData.find(d => d.isTotalRow) || {};
+              const tPups = totalRow.totalPickups || filteredData.reduce((s, r) => s + (r.isTotalRow ? 0 : r.totalPickups || 0), 0);
+              const cPups = totalRow.pickupsCompleted || filteredData.reduce((s, r) => s + (r.isTotalRow ? 0 : r.pickupsCompleted || 0), 0);
+              const pPups = totalRow.pickupsPending || filteredData.reduce((s, r) => s + (r.isTotalRow ? 0 : r.pickupsPending || 0), 0);
+              const tDels = totalRow.totalDeliveries || filteredData.reduce((s, r) => s + (r.isTotalRow ? 0 : r.totalDeliveries || 0), 0);
+              const cDels = totalRow.deliveriesCompleted || filteredData.reduce((s, r) => s + (r.isTotalRow ? 0 : r.deliveriesCompleted || 0), 0);
+              const pDels = totalRow.deliveriesPending || filteredData.reduce((s, r) => s + (r.isTotalRow ? 0 : r.deliveriesPending || 0), 0);
+              const tTasks = totalRow.totalTasks || (tPups + tDels);
+              const cTasks = totalRow.completedTasks || (cPups + cDels);
+              const pTasks = totalRow.pendingTasks || (pPups + pDels);
+
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-2xl bg-surface-alt/60 border border-border">
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-surface border border-border/50">
+                    <div>
+                      <p className="text-[11px] font-semibold text-secondary uppercase">Pickups</p>
+                      <p className="text-base font-bold text-primary">{tPups} <span className="text-xs font-normal text-secondary">Assigned</span></p>
+                    </div>
+                    <div className="text-right text-xs">
+                      <p className="font-semibold text-emerald-600">{cPups} Done</p>
+                      <p className="font-semibold text-amber-600">{pPups} Pending</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-surface border border-rose-500/20">
+                    <div>
+                      <p className="text-[11px] font-semibold text-secondary uppercase">Deliveries</p>
+                      <p className="text-base font-bold text-primary">{tDels} <span className="text-xs font-normal text-secondary">Assigned</span></p>
+                    </div>
+                    <div className="text-right text-xs">
+                      <p className="font-semibold text-emerald-600">{cDels} Done</p>
+                      <p className="font-bold text-rose-600 px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20">{pDels} Pending</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-surface border border-border/50">
+                    <div>
+                      <p className="text-[11px] font-semibold text-secondary uppercase">Total Tasks</p>
+                      <p className="text-base font-bold text-primary">{tTasks} <span className="text-xs font-normal text-secondary">Total</span></p>
+                    </div>
+                    <div className="text-right text-xs">
+                      <p className="font-bold text-emerald-600">{cTasks} Completed</p>
+                      <p className="font-bold text-rose-600">{pTasks} Pending</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Rendered Custom Results Table */}
             <div className="overflow-x-auto border border-border/50 rounded-xl">
@@ -902,12 +1266,53 @@ const Reports = () => {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="report-section-card surface-card border border-border p-6 shadow-xl">
-          <h3 className="text-lg font-semibold text-primary">Daily Sales Report</h3>
-          <p className="mt-1 text-sm text-secondary">Today&apos;s snapshot</p>
+          <h3 className="text-lg font-semibold text-primary">{language === 'ar' ? 'تقرير المبيعات والعمليات اليومي' : 'Daily Sales & Operations Report'}</h3>
+          <p className="mt-1 text-sm text-secondary">Today&apos;s financial & driver tasks snapshot</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <MetricBlock label="Revenue Today" value={formatCurrency(metrics.daily.revenueToday)} />
             <MetricBlock label="Orders Today" value={metrics.daily.ordersToday} />
             <MetricBlock label="Payments Received" value={formatCurrency(metrics.daily.paymentsReceived)} />
+          </div>
+
+          {/* Driver & Logistics Daily Breakdown (Requirement 6) */}
+          <div className="mt-4 pt-4 border-t border-border/60">
+            <p className="text-xs font-bold uppercase tracking-wider text-secondary mb-3">
+              🚚 {language === 'ar' ? 'مهام السائقين اليومية (Driver Daily Operations)' : "Today's Driver Operations"}
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="metric-block rounded-2xl border border-border bg-surface-alt p-3.5">
+                <p className="text-[11px] uppercase tracking-wider text-secondary font-semibold">Today Pickups</p>
+                <p className="mt-1.5 text-lg font-bold text-primary">
+                  {metrics.daily.pickupsAssignedToday ?? 0} <span className="text-xs font-normal text-secondary">Assigned</span>
+                </p>
+                <div className="mt-1 flex items-center justify-between text-[11px]">
+                  <span className="text-emerald-600 font-semibold">{metrics.daily.pickupsCompletedToday ?? 0} Done</span>
+                  <span className="text-amber-600 font-semibold">{metrics.daily.pickupsPendingToday ?? 0} Pending</span>
+                </div>
+              </div>
+
+              <div className="metric-block rounded-2xl border border-border bg-surface-alt p-3.5">
+                <p className="text-[11px] uppercase tracking-wider text-secondary font-semibold">Today Deliveries</p>
+                <p className="mt-1.5 text-lg font-bold text-primary">
+                  {metrics.daily.deliveriesAssignedToday ?? 0} <span className="text-xs font-normal text-secondary">Assigned</span>
+                </p>
+                <div className="mt-1 flex items-center justify-between text-[11px]">
+                  <span className="text-emerald-600 font-semibold">{metrics.daily.deliveriesCompletedToday ?? 0} Done</span>
+                  <span className="text-rose-600 font-bold px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20">{metrics.daily.deliveriesPendingToday ?? 0} Pending</span>
+                </div>
+              </div>
+
+              <div className="metric-block rounded-2xl border border-border bg-surface-alt p-3.5">
+                <p className="text-[11px] uppercase tracking-wider text-secondary font-semibold">Total Driver Tasks</p>
+                <p className="mt-1.5 text-lg font-bold text-primary">
+                  {metrics.daily.totalTasksToday ?? 0} <span className="text-xs font-normal text-secondary">Total</span>
+                </p>
+                <div className="mt-1 flex items-center justify-between text-[11px]">
+                  <span className="text-emerald-600 font-semibold">{metrics.daily.totalCompletedToday ?? 0} Done</span>
+                  <span className="text-rose-600 font-semibold">{metrics.daily.totalPendingToday ?? 0} Pending</span>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -973,10 +1378,23 @@ const Reports = () => {
         <section className="report-section-card surface-card border border-border p-6 shadow-xl">
           <h3 className="text-lg font-semibold text-primary">Home Service Analytics</h3>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <MetricBlock label="Total Pickups" value={metrics.logistics.totalPickups} />
-            <MetricBlock label="Completed Pickups" value={metrics.logistics.completedPickups} />
-            <MetricBlock label="Total Deliveries" value={metrics.logistics.totalDeliveries} />
-            <MetricBlock label="Failed Deliveries" value={metrics.logistics.failedDeliveries} />
+            <div className="metric-block rounded-2xl border border-border bg-surface-alt p-4">
+              <p className="text-xs uppercase tracking-[0.3em] text-secondary">Pickups</p>
+              <p className="mt-2 text-xl font-semibold text-primary">{metrics.logistics.totalPickups}</p>
+              <div className="mt-1 flex items-center gap-3 text-xs text-secondary">
+                <span className="text-emerald-600 font-semibold">{metrics.logistics.completedPickups} Done</span>
+                <span className="text-amber-600 font-semibold">{metrics.logistics.pendingPickups ?? (metrics.logistics.totalPickups - metrics.logistics.completedPickups)} Pending</span>
+              </div>
+            </div>
+
+            <div className="metric-block rounded-2xl border border-border bg-surface-alt p-4">
+              <p className="text-xs uppercase tracking-[0.3em] text-secondary">Deliveries</p>
+              <p className="mt-2 text-xl font-semibold text-primary">{metrics.logistics.totalDeliveries}</p>
+              <div className="mt-1 flex items-center gap-3 text-xs text-secondary">
+                <span className="text-emerald-600 font-semibold">{metrics.logistics.completedDeliveries ?? metrics.logistics.totalDeliveries} Done</span>
+                <span className="text-rose-600 font-semibold">{metrics.logistics.pendingDeliveries ?? 0} Pending</span>
+              </div>
+            </div>
           </div>
         </section>
       </div>

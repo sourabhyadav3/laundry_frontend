@@ -1,10 +1,10 @@
 import React, { useContext, useMemo, useState } from 'react';
-import { FiSearch, FiChevronDown, FiPrinter } from 'react-icons/fi';
+import { FiSearch, FiChevronDown, FiPrinter, FiDownload } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { AdminStateContext } from '../../context/AdminStateContext';
 import OrderTable from '../../Components/counter/OrderTable';
 import Modal from '../../Components/Modal';
-import { formatCurrency, formatDate, generateInvoicePDF, cacheReceiptSnapshot } from '../../utils/exportUtils';
+import { formatCurrency, formatDate, generateInvoicePDF, cacheReceiptSnapshot, exportToCSV } from '../../utils/exportUtils';
 import { ORDER_STATUSES, getNextOrderStatus, getOrderStatusStyle, HOLD_STATUS, paymentStatusStyles } from '../../constants/statusStyles';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -226,7 +226,9 @@ const Invoices = () => {
         <div className="dashboard-hero p-8 md:p-10">
           <p className="text-sm uppercase tracking-[0.3em] text-secondary">Counter Staff</p>
           <h1 className="mt-3 text-3xl font-semibold text-primary">Invoices List</h1>
-          <p className="mt-2 text-sm text-secondary">View invoices and update status through the workflow.</p>
+          <p className="mt-2 text-sm text-secondary">
+            Total: <span className="font-semibold text-primary">{filteredOrders.length}</span> invoices
+          </p>
         </div>
       </section>
 
@@ -239,6 +241,29 @@ const Invoices = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full rounded-3xl border border-border bg-surface py-3 pl-12 pr-4 text-primary"
         />
+      </div>
+
+      {/* Export and Stats */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-1">
+          <h2 className="text-xl font-semibold text-primary">Invoices List</h2>
+          <p className="text-sm text-secondary">
+            Total: <span className="font-medium text-primary">{filteredOrders.length}</span> invoices
+            {orders && orders.length !== filteredOrders.length && (
+              <span className="text-xs text-secondary/70 ml-2">
+                (Total across all branches: {orders.length})
+              </span>
+            )}
+          </p>
+        </div>
+        <button
+          onClick={() => exportToCSV(filteredOrders, 'invoices.csv')}
+          className="action-button"
+          title="Export to CSV"
+        >
+          <FiDownload size={16} />
+          <span>Export</span>
+        </button>
       </div>
 
       <section className="surface-card border border-border overflow-hidden">

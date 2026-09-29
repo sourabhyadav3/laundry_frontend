@@ -143,7 +143,10 @@ export const AdminStateProvider = ({ children }) => {
       const storedUser = localStorage.getItem('user');
       if (storedUser) {
         const parsed = JSON.parse(storedUser);
-        if (parsed && parsed.role !== 'Super Admin' && parsed.branchId && parsed.branchId !== 'null' && parsed.branchId !== 'undefined') {
+        if (parsed && parsed.role === 'Super Admin') {
+          return 'All';
+        }
+        if (parsed && parsed.branchId && parsed.branchId !== 'null' && parsed.branchId !== 'undefined') {
           return parsed.branchId;
         }
       }
@@ -765,8 +768,10 @@ export const AdminStateProvider = ({ children }) => {
       const res = await api.put(`/drivers/${updatedDriver.id}`, updatedDriver);
       setDrivers(prev => prev.map(d => d.id === updatedDriver.id ? res.data : d));
       toast.success('Driver profile updated');
+      return true;
     } catch (e) {
       toast.error(e.response?.data?.message || 'Failed to update driver');
+      return false;
     }
   };
 

@@ -23,7 +23,7 @@ const roleColors = {
 
 const Staff = () => {
   const navigate = useNavigate();
-  const { staff, deleteStaff, updateStaff } = useContext(AdminStateContext);
+  const { staff, deleteStaff, updateStaff, selectedBranch, branches } = useContext(AdminStateContext);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -34,15 +34,38 @@ const Staff = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // Calculate summary stats
-  const totalStaff = staff.length;
-  const activeStaff = staff.filter((s) => s.status === 'Active').length;
-  const counterStaff = staff.filter((s) => s.role === 'Counter Staff').length;
-  const deliveryStaff = staff.filter((s) => s.role === 'Delivery Staff').length;
-  const adminUsers = staff.filter((s) => s.role === 'Admin').length;
+  // Filter staff by active selected branch
+  const branchStaff = useMemo(() => {
+    if (!selectedBranch || selectedBranch === 'All') return staff;
+
+    const targetBranchObj = (branches || []).find(
+      (b) => String(b.id || b._id) === String(selectedBranch) || b.name === selectedBranch
+    );
+    const targetId = targetBranchObj ? String(targetBranchObj.id || targetBranchObj._id) : String(selectedBranch);
+    const targetName = (targetBranchObj ? targetBranchObj.name : selectedBranch).toLowerCase().trim();
+
+    return (staff || []).filter((s) => {
+      const bId = String(s.branchId || '');
+      const bIds = (s.branchIds || []).map(String);
+      const bName = String(s.branch || '').toLowerCase();
+      const bNames = (s.branches || []).map((name) => String(name).toLowerCase());
+
+      const matchesId = bId === targetId || bIds.includes(targetId);
+      const matchesName = bName === targetName || bNames.some((n) => n === targetName || n.includes(targetName));
+
+      return matchesId || matchesName;
+    });
+  }, [staff, selectedBranch, branches]);
+
+  // Calculate summary stats for the active branch
+  const totalStaff = branchStaff.length;
+  const activeStaff = branchStaff.filter((s) => s.status === 'Active').length;
+  const counterStaff = branchStaff.filter((s) => s.role === 'Counter Staff').length;
+  const deliveryStaff = branchStaff.filter((s) => s.role === 'Delivery Staff').length;
+  const adminUsers = branchStaff.filter((s) => s.role === 'Admin').length;
 
   const filteredStaff = useMemo(() => {
-    return staff.filter((staffMember) => {
+    return branchStaff.filter((staffMember) => {
       const matchesSearch =
         staffMember.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         staffMember.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -53,7 +76,7 @@ const Staff = () => {
 
       return matchesSearch && matchesRole && matchesStatus;
     });
-  }, [staff, searchTerm, roleFilter, statusFilter]);
+  }, [branchStaff, searchTerm, roleFilter, statusFilter]);
 
   const handleViewStaff = (staffMember) => {
     navigate(`/admin/staff/${staffMember.id}`);
@@ -252,7 +275,7 @@ const Staff = () => {
       {/* Summary Cards */}
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
         <StatsCard accent="blue" label="Total Staff" value={totalStaff} change="+2" changePositive />
-        <StatsCard accent="emerald" label="Active Staff" value={activeStaff} change={`${Math.round((activeStaff / totalStaff) * 100)}%`} changePositive />
+        <StatsCard accent="emerald" label="Active Staff" value={activeStaff} change={`${totalStaff > 0 ? Math.round((activeStaff / totalStaff) * 100) : 0}%`} changePositive />
         <StatsCard accent="violet" label="Counter Staff" value={counterStaff} change="+1" changePositive />
         <StatsCard accent="cyan" label="Delivery Staff" value={deliveryStaff} change="+3" changePositive />
         <StatsCard accent="amber" label="Admin Users" value={adminUsers} change="0" changePositive={false} />

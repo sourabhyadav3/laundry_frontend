@@ -1,10 +1,10 @@
-import React, { useContext, useState, useMemo } from 'react';
+import React, { useContext, useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   FiSearch, 
   FiPlus, 
   FiEye, 
-  FiEdit2,
+  FiEdit2, 
   FiLock, 
   FiUnlock, 
   FiTrash2, 
@@ -27,10 +27,17 @@ const statusColors = {
 };
 
 const Users = () => {
-  const { staff, addStaff, updateStaff, deleteStaff, lockStaff, branches } = useContext(AdminStateContext);
+  const { staff, addStaff, updateStaff, deleteStaff, lockStaff, branches, fetchData } = useContext(AdminStateContext);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [roleFilter, setRoleFilter] = useState('All');
+
+  useEffect(() => {
+    if (fetchData) {
+      fetchData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);

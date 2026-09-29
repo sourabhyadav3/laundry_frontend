@@ -110,6 +110,7 @@ const Sidebar = () => {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
     localStorage.removeItem('refreshToken');
+    localStorage.removeItem('selected_branch');
     toast.success(t('nav.logoutSuccess') || 'Logged out successfully');
     navigate('/');
   };

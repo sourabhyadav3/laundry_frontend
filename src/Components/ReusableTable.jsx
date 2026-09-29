@@ -99,8 +99,8 @@ const ReusableTable = ({ columns, data, getRowStyle, getRowClassName, onRowClick
                     key={col.accessor ? `${col.accessor}-${colIdx}` : colIdx}
                     className={`px-5 py-4 text-left text-xs uppercase tracking-[0.3em] whitespace-nowrap ${
                       isTotalCol ? 'font-extrabold text-primary text-[13px]' : 'font-semibold text-muted'
-                    }`}
-                    style={isTotalCol ? { fontWeight: 800 } : undefined}
+                    } ${col.className || ''}`}
+                    style={{ ...col.style, ...(isTotalCol ? { fontWeight: 800 } : {}) }}
                   >
                     {typeof col.header === 'string' ? tr(col.header) : col.header}
                   </th>
@@ -201,8 +201,8 @@ const ReusableTable = ({ columns, data, getRowStyle, getRowClassName, onRowClick
                     return (
                       <td
                         key={col.accessor ? `${col.accessor}-${colIdx}` : colIdx}
-                        className={`px-5 py-4 whitespace-nowrap ${isTotalCol ? 'font-extrabold text-[15px] text-primary font-mono' : 'text-sm text-primary'}`}
-                        style={finalTdStyle}
+                        className={`px-5 py-4 whitespace-nowrap ${isTotalCol ? 'font-extrabold text-[15px] text-primary font-mono' : 'text-sm text-primary'} ${col.className || ''}`}
+                        style={{ ...col.style, ...finalTdStyle }}
                       >
                         {value}
                       </td>

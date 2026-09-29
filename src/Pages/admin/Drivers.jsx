@@ -180,11 +180,6 @@ const Drivers = () => {
     });
   };
 
-  useEffect(() => {
-    if (!form.id && filteredDrivers.length > 0) {
-      handleSelectDriver(filteredDrivers[0]);
-    }
-  }, [filteredDrivers, form.id]);
 
   useEffect(() => {
     if (!isSuperAdmin && adminBranchObj && !form.branch && !form.id) {
@@ -195,7 +190,7 @@ const Drivers = () => {
     }
   }, [adminBranchObj, isSuperAdmin, form.branch, form.id]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.id) {
       toast.warning(language === 'ar' ? 'يرجى تحديد سائق من القائمة لتعديله. يتم إنشاء السائقين الجدد من إدارة الموظفين.' : 'Please select a driver from the list to edit. New drivers must be created in Staff Management.');
       return;
@@ -209,8 +204,10 @@ const Drivers = () => {
       return;
     }
 
-    updateDriver(form);
-    toast.success(language === 'ar' ? 'تم تحديث بيانات السائق بنجاح' : 'Driver details updated successfully');
+    const success = await updateDriver(form);
+    if (success) {
+      setForm(emptyDriverForm);
+    }
   };
 
   const handleDelete = () => {

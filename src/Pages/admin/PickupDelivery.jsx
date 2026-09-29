@@ -1,14 +1,18 @@
 import React, { useContext, useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { FiSearch, FiPlus, FiEye, FiEdit2, FiChevronDown, FiTruck, FiFileText, FiCheck } from 'react-icons/fi';
+import { FiSearch, FiPlus, FiEye, FiEdit2, FiChevronDown, FiTruck, FiFileText, FiCheck, FiX, FiCalendar, FiFilter, FiRotateCcw } from 'react-icons/fi';
 import { AdminStateContext } from '../../context/AdminStateContext';
 import ReusableTable from '../../Components/ReusableTable';
+import CustomerFormModal from '../../Components/CustomerFormModal';
 import { toast } from 'react-toastify';
 import { formatDate, formatCurrency } from '../../utils/exportUtils';
 import { useLanguage } from '../../context/LanguageContext';
+import { CUSTOMER_AREAS } from '../../constants/areas';
+
+const DEFAULT_AREAS = CUSTOMER_AREAS;
 
 const pickupStatuses = ['Scheduled', 'Assigned', 'Picked Up', 'Completed'];
-const deliveryStatuses = ['Scheduled', 'Out for Delivery', 'Delivered', 'Failed'];
+const deliveryStatuses = ['Scheduled', 'Assigned' , 'Out for Delivery', 'Delivered', 'Failed'];
 
 const pickupStatusColors = {
   Scheduled: 'bg-sky-500/10 text-sky-600 border-sky-500/15',
@@ -24,10 +28,42 @@ const deliveryStatusColors = {
   Failed: 'bg-rose-500/10 text-rose-600 border-rose-500/15',
 };
 
+const toDateStr = (val) => {
+  if (!val) return '';
+  if (typeof val === 'string') {
+    if (/^\d{4}-\d{2}-\d{2}/.test(val)) {
+      return val.substring(0, 10);
+    }
+    const parts = val.split(/[/.-]/);
+    if (parts.length === 3 && parts[2].length === 4) {
+      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+  }
+  try {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().split('T')[0];
+    }
+  } catch (e) {
+    return '';
+  }
+  return '';
+};
+
+const isDateInRange = (itemDate, start, end) => {
+  if (!start && !end) return true;
+  const d = toDateStr(itemDate);
+  if (!d) return true;
+  if (start && d < start) return false;
+  if (end && d > end) return false;
+  return true;
+};
+
 const normalizeAreaKey = (area) =>
   String(area || '')
     .trim()
     .toLowerCase()
+    .replace(/^(area|منطقة)\s*[:：\-]?\s*/i, '')
     .replace(/\s+/g, ' ');
 
 const AREA_ALIASES = {
@@ -50,41 +86,84 @@ const getDriverAreas = (drv) => {
     .filter((a) => a && a !== '...' && a !== '…');
 };
 
-const getAssignableDrivers = (driversList, customerArea, currentlyAssigned = '') => {
-  const allDrivers = driversList || [];
-  const seen = new Set();
-  const list = [];
+const isDriverAreaMatch = (drv, customerArea, customerAddress) => {
+  const driverAreas = getDriverAreas(drv);
+  // If driver has no specific areas configured or has 'All', they can deliver to any area
+  if (
+    !driverAreas ||
+    driverAreas.length === 0 ||
+    driverAreas.some((a) => ['all', 'all areas', 'جميع المناطق', 'all area'].includes(normalizeAreaKey(a)))
+  ) {
+    return true;
+  }
 
-  if (currentlyAssigned) {
-    const assigned = allDrivers.find((d) => d.driverName === currentlyAssigned);
-    if (assigned) {
-      list.push(assigned);
-      seen.add(assigned.driverName);
+  // 1. Direct match with customerArea
+  if (customerArea && String(customerArea).trim()) {
+    const cleanCustArea = String(customerArea).trim();
+    if (driverAreas.some((dArea) => areasMatch(dArea, cleanCustArea))) {
+      return true;
     }
   }
 
-  allDrivers.forEach((drv) => {
-    if (drv.status === 'Off Duty' || seen.has(drv.driverName)) return;
-    list.push(drv);
-    seen.add(drv.driverName);
-  });
+  // 2. Match with customerAddress
+  if (customerAddress && String(customerAddress).trim()) {
+    const addr = String(customerAddress).trim();
 
-  const area = customerArea || '';
-  const isAreaMatch = (drv) =>
-    area ? getDriverAreas(drv).some((driverArea) => areasMatch(driverArea, area)) : false;
+    // Check comma/semicolon/newline separated segments
+    const segments = addr.split(/[,;\n]/).map((s) => s.trim()).filter(Boolean);
+    for (const seg of segments) {
+      if (driverAreas.some((dArea) => areasMatch(dArea, seg))) {
+        return true;
+      }
+    }
 
-  return list.sort((a, b) => {
-    const aMatch = isAreaMatch(a) ? 0 : 1;
-    const bMatch = isAreaMatch(b) ? 0 : 1;
-    if (aMatch !== bMatch) return aMatch - bMatch;
-    const order = { Available: 1, Assigned: 2, 'On Delivery': 3, 'Off Duty': 4 };
+    // Check if any driver area is mentioned in address with word boundary
+    const normAddr = normalizeAreaKey(addr);
+    for (const dArea of driverAreas) {
+      const normDArea = normalizeAreaKey(dArea);
+      const aliasArea = AREA_ALIASES[normDArea] || normDArea;
+      if (!aliasArea) continue;
+
+      const escaped = aliasArea.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i');
+      if (regex.test(normAddr)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
+
+const getAssignableDrivers = (driversList, customerArea = '', customerAddress = '') => {
+  const allDrivers = driversList || [];
+  const hasAreaCriteria = Boolean(
+    (customerArea && String(customerArea).trim()) ||
+    (customerAddress && String(customerAddress).trim())
+  );
+
+  let filtered = allDrivers.filter((drv) => drv.status !== 'Off Duty');
+
+  if (hasAreaCriteria) {
+    filtered = filtered.filter((drv) => isDriverAreaMatch(drv, customerArea, customerAddress));
+  }
+
+  const order = { Available: 1, Assigned: 2, 'On Delivery': 3, 'Off Duty': 4 };
+  return filtered.sort((a, b) => {
+    const aAreas = getDriverAreas(a);
+    const bAreas = getDriverAreas(b);
+    const aHasSpecific = aAreas && aAreas.length > 0 ? 0 : 1;
+    const bHasSpecific = bAreas && bAreas.length > 0 ? 0 : 1;
+    if (aHasSpecific !== bHasSpecific) {
+      return aHasSpecific - bHasSpecific;
+    }
     return (order[a.status] || 5) - (order[b.status] || 5);
   });
 };
 
 const PickupDelivery = () => {
   const { t, language } = useLanguage();
-  const { pickups, deliveries, drivers, customers, orders, assignDriverToJob, updatePickupJob, updateDeliveryJob, addPickup, addDelivery, selectedBranch, branches } = useContext(AdminStateContext);
+  const { pickups, deliveries, drivers, customers, orders, assignDriverToJob, updatePickupJob, updateDeliveryJob, addPickup, addDelivery, addCustomer, selectedBranch, branches } = useContext(AdminStateContext);
   const isHomeServices = useMemo(() => {
     try {
       const user = JSON.parse(localStorage.getItem('user'));
@@ -96,6 +175,11 @@ const PickupDelivery = () => {
   }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [pickupStatusFilter, setPickupStatusFilter] = useState('All');
+  const [deliveryStatusFilter, setDeliveryStatusFilter] = useState('All');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [branchFilter, setBranchFilter] = useState('All');
+  const [activeTab, setActiveTab] = useState('deliveries'); // 'deliveries' | 'pickups'
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [showCustomerResults, setShowCustomerResults] = useState(false);
@@ -104,6 +188,8 @@ const PickupDelivery = () => {
   const [selectedDelivery, setSelectedDelivery] = useState(null);
   const [showPickupModal, setShowPickupModal] = useState(false);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+
+  const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
 
   const [selectedPickupIds, setSelectedPickupIds] = useState([]);
   const [selectedDeliveryIds, setSelectedDeliveryIds] = useState([]);
@@ -134,13 +220,15 @@ const PickupDelivery = () => {
     return customers.filter(
       (c) =>
         (c.name || '').toLowerCase().includes(q) ||
+        (c.englishName || '').toLowerCase().includes(q) ||
+        (c.arabicName || '').toLowerCase().includes(q) ||
         (c.phone || '').includes(customerSearchQuery) ||
         (c.phones && c.phones.some((p) => p && String(p).includes(customerSearchQuery)))
     );
   }, [customers, customerSearchQuery]);
 
   const selectedCustomerObj = useMemo(() => {
-    return customers.find((c) => String(c.id) === String(selectedCustomerId)) || null;
+    return customers.find((c) => String(c.id) === String(selectedCustomerId) || String(c._id) === String(selectedCustomerId)) || null;
   }, [customers, selectedCustomerId]);
 
   const customerInputDisplay =
@@ -151,7 +239,7 @@ const PickupDelivery = () => {
         : '';
 
   const handleSelectCustomer = (cust) => {
-    setSelectedCustomerId(cust.id);
+    setSelectedCustomerId(cust.id || cust._id);
     setCustomerSearchQuery('');
     setShowCustomerResults(false);
     setSearchTerm('');
@@ -165,6 +253,30 @@ const PickupDelivery = () => {
     setSearchTerm('');
     setSelectedPickupIds([]);
   };
+
+  const handleResetFilters = () => {
+    setStartDate('');
+    setEndDate('');
+    setBranchFilter('All');
+    setDeliveryStatusFilter('All');
+    setPickupStatusFilter('All');
+    setSearchTerm('');
+    setSelectedCustomerId('');
+    setCustomerSearchQuery('');
+    setShowCustomerResults(false);
+    setSelectedPickupIds([]);
+    setSelectedDeliveryIds([]);
+  };
+
+  const hasActiveFilters = Boolean(
+    startDate ||
+    endDate ||
+    branchFilter !== 'All' ||
+    deliveryStatusFilter !== 'All' ||
+    pickupStatusFilter !== 'All' ||
+    searchTerm ||
+    selectedCustomerId
+  );
 
   const ensureCustomerSelected = () => {
     if (!selectedCustomerObj) {
@@ -711,15 +823,17 @@ const PickupDelivery = () => {
   // Get filtered and sorted drivers for New Pickup Modal
   const assignableDriversForNewPickup = useMemo(() => {
     const cust = customers.find((c) => c.name === addPickupData.customer);
-    if (!cust) return [];
-    const custBranchId = cust.branchId || cust.branch;
+    if (!cust && !addPickupData.address) return [];
+    const custBranchId = cust?.branchId || cust?.branch;
     const targetBranch = branches?.find(b => (b.id || b._id)?.toString() === custBranchId?.toString());
     const targetBranchName = targetBranch ? targetBranch.name : '';
     const branchDrivers = targetBranchName
       ? drivers.filter(d => d.branch === targetBranchName)
       : drivers;
-    return getAssignableDrivers(branchDrivers, cust?.areaName);
-  }, [drivers, customers, addPickupData.customer, branches]);
+    const custArea = cust?.areaName || cust?.area || '';
+    const custAddress = addPickupData.address || cust?.address || '';
+    return getAssignableDrivers(branchDrivers, custArea, custAddress);
+  }, [drivers, customers, addPickupData.customer, addPickupData.address, branches]);
 
   // Get filtered and sorted drivers for Edit Pickup Modal
   const assignableDriversForEditPickup = useMemo(() => {
@@ -731,21 +845,25 @@ const PickupDelivery = () => {
     const branchDrivers = targetBranchName
       ? drivers.filter(d => d.branch === targetBranchName)
       : drivers;
-    return getAssignableDrivers(branchDrivers, cust?.areaName, editPickupData.assignedStaff);
+    const custArea = cust?.areaName || cust?.area || editPickupData.areaName || '';
+    const custAddress = editPickupData.address || cust?.address || '';
+    return getAssignableDrivers(branchDrivers, custArea, custAddress);
   }, [drivers, customers, editPickupData, branches]);
 
   // Get filtered and sorted drivers for New Delivery Modal
   const assignableDriversForNewDelivery = useMemo(() => {
     const cust = customers.find((c) => c.name === addDeliveryData.customer);
-    if (!cust) return [];
-    const custBranchId = cust.branchId || cust.branch;
+    if (!cust && !addDeliveryData.address) return [];
+    const custBranchId = cust?.branchId || cust?.branch;
     const targetBranch = branches?.find(b => (b.id || b._id)?.toString() === custBranchId?.toString());
     const targetBranchName = targetBranch ? targetBranch.name : '';
     const branchDrivers = targetBranchName
       ? drivers.filter(d => d.branch === targetBranchName)
       : drivers;
-    return getAssignableDrivers(branchDrivers, cust?.areaName);
-  }, [drivers, customers, addDeliveryData.customer, branches]);
+    const custArea = cust?.areaName || cust?.area || '';
+    const custAddress = addDeliveryData.address || cust?.address || '';
+    return getAssignableDrivers(branchDrivers, custArea, custAddress);
+  }, [drivers, customers, addDeliveryData.customer, addDeliveryData.address, branches]);
 
   // Get filtered and sorted drivers for Edit Delivery Modal
   const assignableDriversForEditDelivery = useMemo(() => {
@@ -757,31 +875,68 @@ const PickupDelivery = () => {
     const branchDrivers = targetBranchName
       ? drivers.filter(d => d.branch === targetBranchName)
       : drivers;
-    return getAssignableDrivers(branchDrivers, cust?.areaName, editDeliveryData.assignedStaff);
+    const custArea = cust?.areaName || cust?.area || editDeliveryData.areaName || '';
+    const custAddress = editDeliveryData.address || cust?.address || '';
+    return getAssignableDrivers(branchDrivers, custArea, custAddress);
   }, [drivers, customers, editDeliveryData, branches]);
 
-  const getCustomerAddress = (custName) => {
-    const cust = customers.find(c => c.name === custName);
-    if (!cust) return '';
-    const addressParts = [
-      cust.areaName ? `Area: ${cust.areaName}` : '',
+  const getCustomerAddress = (custName, extraObj = null) => {
+    // 1. If extraObj has a non-empty address that is not 'N/A', return it
+    if (extraObj?.address && String(extraObj.address).trim() && String(extraObj.address).trim() !== 'N/A') {
+      return String(extraObj.address).trim();
+    }
+
+    const cleanName = String(custName || extraObj?.customer || '').trim().toLowerCase();
+    const custId = extraObj?.customerId || extraObj?.customer;
+    const phone = extraObj?.contactNumber || extraObj?.phone || extraObj?.customerPhone;
+
+    const cust = customers.find(c => {
+      if (cleanName && c.name && c.name.trim().toLowerCase() === cleanName) return true;
+      if (custId && (String(c.id) === String(custId) || String(c._id) === String(custId) || String(c.customerNo) === String(custId))) return true;
+      if (phone && c.phone && (c.phone === phone || c.phone.includes(phone))) return true;
+      return false;
+    });
+
+    if (!cust) {
+      return (extraObj?.address && extraObj.address !== 'N/A') ? extraObj.address : '';
+    }
+
+    if (cust.address && String(cust.address).trim() && String(cust.address).trim() !== 'N/A') {
+      return String(cust.address).trim();
+    }
+
+    const parts = [
+      cust.areaName || cust.area ? `${cust.areaName || cust.area}` : '',
       cust.partNo ? `Block: ${cust.partNo}` : '',
       cust.street ? `Street: ${cust.street}` : '',
       cust.jadda ? `Jadah: ${cust.jadda}` : '',
       cust.houseNo ? `House: ${cust.houseNo}` : '',
-      cust.levelNo ? `F: ${cust.levelNo}` : '',
+      cust.levelNo ? `Floor: ${cust.levelNo}` : '',
       cust.flatNo ? `Flat: ${cust.flatNo}` : '',
-    ].filter(Boolean).join(', ');
-    return addressParts || cust.address || '';
+    ].filter(Boolean);
+
+    if (parts.length > 0) {
+      return parts.join(', ');
+    }
+
+    return cust.address || '';
   };
 
   const handleEditPickup = (pickup) => {
-    setEditPickupData({ ...pickup });
+    const resolvedAddress = getCustomerAddress(pickup.customer, pickup);
+    setEditPickupData({
+      ...pickup,
+      address: resolvedAddress
+    });
     setShowEditPickupModal(true);
   };
 
   const handleEditDelivery = (delivery) => {
-    setEditDeliveryData({ ...delivery });
+    const resolvedAddress = getCustomerAddress(delivery.customer, delivery);
+    setEditDeliveryData({
+      ...delivery,
+      address: resolvedAddress
+    });
     setShowEditDeliveryModal(true);
   };
 
@@ -815,19 +970,75 @@ const PickupDelivery = () => {
       const pickupCustomer = pickup.customer || '';
       const matchesCustomer =
         !selectedCustomerObj || pickupCustomer.toLowerCase() === selectedCustomerObj.name.toLowerCase();
+      const q = (searchTerm || '').trim().toLowerCase();
       const matchesSearch =
-        pickupCustomer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (pickup.pickupId || '').includes(searchTerm) ||
-        (pickup.requestId || '').includes(searchTerm);
+        !q ||
+        pickupCustomer.toLowerCase().includes(q) ||
+        (pickup.pickupId || '').toLowerCase().includes(q) ||
+        (pickup.requestId || '').toLowerCase().includes(q) ||
+        (pickup.address || '').toLowerCase().includes(q) ||
+        (pickup.contactNumber || '').toLowerCase().includes(q);
       const matchesStatus = pickupStatusFilter === 'All' || pickup.status === pickupStatusFilter;
-      return matchesCustomer && matchesSearch && matchesStatus;
+
+      // Date range filtering
+      const pDate = pickup.pickupDate || pickup.createdAt || pickup.date;
+      const matchesDate = isDateInRange(pDate, startDate, endDate);
+
+      // Branch filtering
+      const matchesBranch = (() => {
+        const effectiveBranch = branchFilter !== 'All' ? branchFilter : selectedBranch;
+        if (!effectiveBranch || effectiveBranch === 'All') return true;
+        const selStr = String(effectiveBranch).toLowerCase();
+
+        const activeBranchObj = branches?.find(
+          (b) =>
+            String(b.id || b._id).toLowerCase() === selStr ||
+            String(b.name || '').toLowerCase() === selStr
+        );
+        const bName = String(activeBranchObj?.name || effectiveBranch || '').toLowerCase();
+        if (bName.includes('home service') || selStr.includes('home')) return true;
+
+        if (pickup.branchId && String(pickup.branchId).toLowerCase() === selStr) return true;
+        if (pickup.branch && String(pickup.branch).toLowerCase() === selStr) return true;
+
+        if (pickup.assignedStaff) {
+          const drv = drivers.find(
+            (d) => d.name === pickup.assignedStaff || d.driverName === pickup.assignedStaff
+          );
+          if (drv) {
+            if (drv.branchId && String(drv.branchId).toLowerCase() === selStr) return true;
+            if (drv.branch && String(drv.branch).toLowerCase() === selStr) return true;
+            if (activeBranchObj && (String(drv.branchId).toLowerCase() === String(activeBranchObj.id || activeBranchObj._id).toLowerCase() || String(drv.branch).toLowerCase() === bName)) return true;
+          }
+        }
+
+        const cust = customers.find(
+          (c) => c.name && c.name.toLowerCase() === pickupCustomer.toLowerCase()
+        );
+        if (cust) {
+          if (cust.branchId && String(cust.branchId).toLowerCase() === selStr) return true;
+          if (cust.branch && String(cust.branch).toLowerCase() === selStr) return true;
+          if (cust.branchName && String(cust.branchName).toLowerCase() === selStr) return true;
+          if (activeBranchObj && (String(cust.branchId).toLowerCase() === String(activeBranchObj.id || activeBranchObj._id).toLowerCase() || String(cust.branchName || cust.branch).toLowerCase() === bName)) return true;
+        }
+
+        if (activeBranchObj) {
+          const bId = String(activeBranchObj.id || activeBranchObj._id).toLowerCase();
+          if (pickup.branchId && String(pickup.branchId).toLowerCase() === bId) return true;
+          if (pickup.branch && String(pickup.branch).toLowerCase() === bName) return true;
+        }
+
+        return false;
+      })();
+
+      return matchesCustomer && matchesSearch && matchesStatus && matchesDate && matchesBranch;
     }).sort((a, b) => {
       if (a.createdAt && b.createdAt) {
         return new Date(b.createdAt) - new Date(a.createdAt);
       }
       return String(b.pickupId || '').localeCompare(String(a.pickupId || ''), undefined, { numeric: true, sensitivity: 'base' });
     });
-  }, [pickups, searchTerm, pickupStatusFilter, selectedCustomerObj]);
+  }, [pickups, searchTerm, pickupStatusFilter, selectedCustomerObj, startDate, endDate, branchFilter, selectedBranch, branches, drivers, customers]);
 
   const allHomeDeliveries = useMemo(() => {
     const deliveryMap = new Map();
@@ -835,13 +1046,24 @@ const PickupDelivery = () => {
     // 1. First add all explicit Delivery records
     (deliveries || []).forEach((d) => {
       const key = d.orderNumber || d.id || d.deliveryId;
-      deliveryMap.set(key, { ...d });
+      const addr = (d.address && d.address.trim() && d.address.trim() !== 'N/A')
+        ? d.address.trim()
+        : getCustomerAddress(d.customer, d);
+      deliveryMap.set(key, { ...d, address: addr });
     });
 
     // 2. Also ensure every order marked Home Delivery is represented
     (orders || []).forEach((o) => {
       const isHome = o.deliveryType === 'Home Delivery' || o.isHomeDelivery === true || o.deliveryMode === 'home';
       if (!isHome) return;
+
+      const custObj = customers.find(c => 
+        (o.customerName && c.name && c.name.trim().toLowerCase() === o.customerName.trim().toLowerCase()) ||
+        (o.customer && (String(c.id) === String(o.customer) || String(c._id) === String(o.customer))) ||
+        (o.customerPhone && c.phone === o.customerPhone)
+      );
+      const custAddress = (custObj ? getCustomerAddress(o.customerName, custObj) : '') || o.notes || '';
+      const custArea = custObj?.areaName || custObj?.area || '';
 
       const existing = deliveryMap.get(o.number) || deliveryMap.get(o.id);
       if (existing) {
@@ -858,6 +1080,12 @@ const PickupDelivery = () => {
         existing.totalAmount = o.totalAmount;
         existing.createdFromInvoice = true;
         existing.createdAt = existing.createdAt || o.createdAt || o.date;
+        if (!existing.address || !existing.address.trim() || existing.address === 'N/A') {
+          existing.address = custAddress;
+        }
+        if (!existing.areaName) {
+          existing.areaName = custArea;
+        }
       } else {
         deliveryMap.set(o.number, {
           id: `del-order-${o.id || o.number}`,
@@ -869,9 +1097,9 @@ const PickupDelivery = () => {
           assignedStaff: 'Unassigned',
           orderCount: (o.itemDetails && o.itemDetails.length) || 1,
           status: o.status === 'Delivered' ? 'Delivered' : 'Scheduled',
-          address: o.notes || '',
-          contactNumber: o.customerPhone || '',
-          areaName: '',
+          address: custAddress,
+          contactNumber: o.customerPhone || (custObj?.phone || ''),
+          areaName: custArea,
           createdFromInvoice: true,
           branchId: o.branchId,
           sharedBranches: o.sharedBranches,
@@ -886,18 +1114,19 @@ const PickupDelivery = () => {
     });
 
     return Array.from(deliveryMap.values());
-  }, [deliveries, orders]);
+  }, [deliveries, orders, customers]);
 
   const filteredDeliveries = useMemo(() => {
     return allHomeDeliveries.filter((delivery) => {
       // Branch filtering: match active selected branch (or transferred branch)
       const matchesBranch = (() => {
-        if (!selectedBranch || selectedBranch === 'All') return true;
-        const selStr = String(selectedBranch).toLowerCase();
+        const effectiveBranch = branchFilter !== 'All' ? branchFilter : selectedBranch;
+        if (!effectiveBranch || effectiveBranch === 'All') return true;
+        const selStr = String(effectiveBranch).toLowerCase();
 
         // If Home Service branch is selected, show all home deliveries across all branches
         const activeBranchObj = branches?.find(b => String(b.id || b._id).toLowerCase() === selStr || String(b.name || '').toLowerCase() === selStr);
-        const bName = String(activeBranchObj?.name || selectedBranch || '').toLowerCase();
+        const bName = String(activeBranchObj?.name || effectiveBranch || '').toLowerCase();
         if (bName.includes('home service') || selStr.includes('home')) return true;
 
         if (delivery.branchId && String(delivery.branchId).toLowerCase() === selStr) return true;
@@ -926,9 +1155,18 @@ const PickupDelivery = () => {
         !searchTerm ||
         deliveryCustomer.toLowerCase().includes(q) ||
         (delivery.deliveryId || '').toLowerCase().includes(q) ||
-        (delivery.orderNumber || '').toLowerCase().includes(q);
+        (delivery.orderNumber || '').toLowerCase().includes(q) ||
+        (delivery.address || '').toLowerCase().includes(q) ||
+        (delivery.contactNumber || '').toLowerCase().includes(q);
 
-      return matchesBranch && matchesCustomer && matchesSearch;
+      // Date range filtering
+      const delDate = delivery.deliveryDate || delivery.orderDate || delivery.createdAt || delivery.date;
+      const matchesDate = isDateInRange(delDate, startDate, endDate);
+
+      // Delivery Status filtering
+      const matchesStatus = deliveryStatusFilter === 'All' || delivery.status === deliveryStatusFilter;
+
+      return matchesBranch && matchesCustomer && matchesSearch && matchesDate && matchesStatus;
     }).sort((a, b) => {
       // 1. Sort by createdAt timestamp if available
       const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -955,7 +1193,7 @@ const PickupDelivery = () => {
 
       return String(b.deliveryId || '').localeCompare(String(a.deliveryId || ''), undefined, { numeric: true, sensitivity: 'base' });
     });
-  }, [allHomeDeliveries, searchTerm, selectedCustomerObj, selectedBranch, branches]);
+  }, [allHomeDeliveries, searchTerm, selectedCustomerObj, selectedBranch, branchFilter, branches, startDate, endDate, deliveryStatusFilter]);
 
   const handleViewPickup = (pickup) => {
     setSelectedPickup(pickup);
@@ -1103,32 +1341,37 @@ const PickupDelivery = () => {
     {
       header: language === 'ar' ? 'العنوان' : 'Address',
       accessor: 'address',
+      style: { width: '1%' },
+      className: 'w-auto',
       cell: (row) => {
         const cust = customers.find((c) => c.name === row.customer);
-        if (language === 'ar') {
+        if (cust && (cust.areaName || cust.partNo || cust.street || cust.jadda || cust.houseNo || cust.levelNo || cust.flatNo)) {
+          if (language === 'ar') {
+            return (
+              <div className="inline-block text-xs space-y-0.5 text-right font-medium w-max max-w-xs" dir="rtl">
+                <div><strong>المنطقة:</strong> {cust?.areaName || row.areaName || '—'}</div>
+                <div><strong>قطعة:</strong> {cust?.partNo || row.partNo || '—'}</div>
+                <div><strong>الشارع:</strong> {cust?.street || row.street || '—'}</div>
+                <div><strong>الجادة:</strong> {cust?.jadda || row.jadda || '—'}</div>
+                <div><strong>المنزل:</strong> {cust?.houseNo || row.houseNo || '—'}</div>
+                <div><strong>الطابق:</strong> {cust?.levelNo || row.levelNo || '—'}</div>
+                <div><strong>الشقة:</strong> {cust?.flatNo || row.flatNo || '—'}</div>
+              </div>
+            );
+          }
           return (
-            <div className="text-xs space-y-0.5 text-right font-medium" dir="rtl">
-              <div><strong>المنطقة:</strong> {cust?.areaName || row.areaName || 'Salmiya'}</div>
-              <div><strong>قطعة:</strong> {cust?.partNo || row.partNo || '12'}</div>
-              <div><strong>الشارع:</strong> {cust?.street || row.street || '5'}</div>
-              <div><strong>الجادة:</strong> {cust?.jadda || row.jadda || '2'}</div>
-              <div><strong>المنزل:</strong> {cust?.houseNo || row.houseNo || '14'}</div>
-              <div><strong>الطابق:</strong> {cust?.levelNo || row.levelNo || '3'}</div>
-              <div><strong>الشقة:</strong> {cust?.flatNo || row.flatNo || '12'}</div>
+            <div className="inline-block text-xs space-y-0.5 text-left font-medium w-max max-w-xs" dir="ltr">
+              <div><strong>Area:</strong> {cust?.areaName || row.areaName || '—'}</div>
+              <div><strong>Block:</strong> {cust?.partNo || row.partNo || '—'}</div>
+              <div><strong>S:</strong> {cust?.street || row.street || '—'}</div>
+              <div><strong>Jadah:</strong> {cust?.jadda || row.jadda || '—'}</div>
+              <div><strong>House:</strong> {cust?.houseNo || row.houseNo || '—'}</div>
+              <div><strong>F:</strong> {cust?.levelNo || row.levelNo || '—'}</div>
+              <div><strong>Flat:</strong> {cust?.flatNo || row.flatNo || '—'}</div>
             </div>
           );
         }
-        return (
-          <div className="text-xs space-y-0.5 text-left font-medium" dir="ltr">
-            <div><strong>Area:</strong> {cust?.areaName || row.areaName || 'Salmiya'}</div>
-            <div><strong>Block:</strong> {cust?.partNo || row.partNo || '12'}</div>
-            <div><strong>S:</strong> {cust?.street || row.street || '5'}</div>
-            <div><strong>Jadah:</strong> {cust?.jadda || row.jadda || '2'}</div>
-            <div><strong>House:</strong> {cust?.houseNo || row.houseNo || '14'}</div>
-            <div><strong>F:</strong> {cust?.levelNo || row.levelNo || '3'}</div>
-            <div><strong>Flat:</strong> {cust?.flatNo || row.flatNo || '12'}</div>
-          </div>
-        );
+        return <span className="text-xs text-secondary whitespace-normal max-w-xs inline-block">{row.address || 'N/A'}</span>;
       }
     },
     { header: 'Pickup Date', accessor: 'pickupDate', format: (val) => formatDate(val) },
@@ -1194,6 +1437,47 @@ const PickupDelivery = () => {
     { header: 'Delivery ID', accessor: 'deliveryId' },
     { header: 'Invoice No.', accessor: 'orderNumber' },
     { header: 'Customer', accessor: 'customer' },
+    {
+      header: language === 'ar' ? 'العنوان' : 'Address',
+      accessor: 'address',
+      style: { width: '1%' },
+      className: 'w-auto',
+      cell: (row) => {
+        const cust = customers.find(
+          (c) =>
+            (c.name && row.customer && c.name.trim().toLowerCase() === row.customer.trim().toLowerCase()) ||
+            (row.customerId && (String(c.id) === String(row.customerId) || String(c._id) === String(row.customerId)))
+        );
+        if (cust && (cust.areaName || cust.partNo || cust.street || cust.jadda || cust.houseNo || cust.levelNo || cust.flatNo)) {
+          if (language === 'ar') {
+            return (
+              <div className="inline-block text-xs space-y-0.5 text-right font-medium w-max max-w-xs" dir="rtl">
+                <div><strong>المنطقة:</strong> {cust?.areaName || row.areaName || '—'}</div>
+                <div><strong>قطعة:</strong> {cust?.partNo || row.partNo || '—'}</div>
+                <div><strong>الشارع:</strong> {cust?.street || row.street || '—'}</div>
+                <div><strong>الجادة:</strong> {cust?.jadda || row.jadda || '—'}</div>
+                <div><strong>المنزل:</strong> {cust?.houseNo || row.houseNo || '—'}</div>
+                <div><strong>الطابق:</strong> {cust?.levelNo || row.levelNo || '—'}</div>
+                <div><strong>الشقة:</strong> {cust?.flatNo || row.flatNo || '—'}</div>
+              </div>
+            );
+          }
+          return (
+            <div className="inline-block text-xs space-y-0.5 text-left font-medium w-max max-w-xs" dir="ltr">
+              <div><strong>Area:</strong> {cust?.areaName || row.areaName || '—'}</div>
+              <div><strong>Block:</strong> {cust?.partNo || row.partNo || '—'}</div>
+              <div><strong>S:</strong> {cust?.street || row.street || '—'}</div>
+              <div><strong>Jadah:</strong> {cust?.jadda || row.jadda || '—'}</div>
+              <div><strong>House:</strong> {cust?.houseNo || row.houseNo || '—'}</div>
+              <div><strong>F:</strong> {cust?.levelNo || row.levelNo || '—'}</div>
+              <div><strong>Flat:</strong> {cust?.flatNo || row.flatNo || '—'}</div>
+            </div>
+          );
+        }
+        const fallback = row.address && row.address !== 'N/A' ? row.address : getCustomerAddress(row.customer, row);
+        return <span className="text-xs text-secondary whitespace-normal max-w-xs inline-block">{fallback || 'N/A'}</span>;
+      }
+    },
     {
       header: 'Order Date',
       accessor: 'orderDate',
@@ -1315,34 +1599,80 @@ const PickupDelivery = () => {
               </div>
 
               {showCustomerResults && (
-                <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-surface border border-border rounded-xl shadow-xl z-50">
-                  {filteredCustomersList.length > 0 ? (
-                    filteredCustomersList.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => handleSelectCustomer(c)}
-                        className="w-full text-left px-3 py-2.5 text-sm hover:bg-surface-alt border-b border-border/40 flex justify-between items-center gap-2"
-                      >
-                        <span className="font-semibold text-primary truncate">{c.name}</span>
-                        <span className="text-secondary font-mono text-xs shrink-0">{c.phone}</span>
-                      </button>
-                    ))
-                  ) : (
-                    <div className="p-3 text-center text-sm text-secondary">No customer matches query.</div>
-                  )}
+                <div className="absolute left-0 right-0 mt-1 bg-surface border border-border rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col">
+                  <div className="max-h-56 overflow-y-auto divide-y divide-border/40">
+                    {filteredCustomersList.length > 0 ? (
+                      filteredCustomersList.map((c) => {
+                        const isSub = c.isSubscriber || Number(c.insuranceAmount || 0) >= 20;
+                        return (
+                          <button
+                            key={c.id || c._id}
+                            type="button"
+                            onClick={() => handleSelectCustomer(c)}
+                            className={`w-full text-left px-3 py-2.5 text-xs flex justify-between items-center transition-colors ${
+                              isSub
+                                ? 'bg-[#543824] hover:bg-[#65432b] text-amber-100 font-bold border-l-4 border-l-amber-500'
+                                : 'hover:bg-surface-alt text-primary'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className={`font-semibold truncate ${isSub ? 'text-white font-bold' : ''}`}>
+                                {language === 'ar' && c.arabicName?.trim() ? c.arabicName : c.name}
+                              </span>
+                              {isSub && (
+                                <span className="text-amber-400 text-xs shrink-0 select-none" title="Subscriber">⭐</span>
+                              )}
+                            </div>
+                            <span className={isSub ? "text-sky-300 font-mono text-xs shrink-0 ml-1" : "text-secondary font-mono text-xs shrink-0 ml-1"}>
+                              {c.phone}
+                            </span>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="p-3 text-center text-xs text-secondary">
+                        {language === 'ar' ? 'لا يوجد عملاء يطابقون البحث' : 'No customer matches query.'}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCustomerResults(false);
+                      setShowAddCustomerModal(true);
+                    }}
+                    className="w-full py-2.5 px-3 bg-[#8b2df0] hover:bg-[#7a22df] text-white text-xs font-bold flex items-center justify-center gap-1.5 border-t border-border/40 transition-all shadow-md shrink-0 cursor-pointer"
+                  >
+                    <FiPlus className="w-4 h-4 stroke-[3]" />
+                    <span className="whitespace-nowrap">{language === 'ar' ? 'إضافة عميل جديد' : 'Add New Customer'}</span>
+                    {customerSearchQuery.trim() && (
+                      <span className="bg-black/25 px-1.5 py-0.5 rounded text-[10px] font-mono font-normal truncate max-w-[100px]">
+                        "{customerSearchQuery.trim()}"
+                      </span>
+                    )}
+                  </button>
                 </div>
               )}
 
-              {selectedCustomerObj && (
-                <button
-                  type="button"
-                  onClick={handleClearCustomer}
-                  className="mt-2 text-xs font-semibold text-rose-500 hover:text-rose-600"
-                >
-                  Clear selection
-                </button>
-              )}
+              {selectedCustomerObj && (() => {
+                const isSub = selectedCustomerObj.isSubscriber || Number(selectedCustomerObj.insuranceAmount || 0) >= 20;
+                return (
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    {isSub && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                        ⭐ {language === 'ar' ? 'مشترك مميز' : 'Subscriber'}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleClearCustomer}
+                      className="text-xs font-semibold text-rose-500 hover:text-rose-600 ml-auto"
+                    >
+                      {language === 'ar' ? 'إلغاء التحديد' : 'Clear selection'}
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
 
             {!selectedCustomerObj ? (
@@ -1447,112 +1777,244 @@ const PickupDelivery = () => {
           </div>
         </section>
 
-        {!selectedCustomerObj ? (
-          <>
-            {/* Deliveries Section */}
-            <section className="mt-6">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-semibold text-primary">
-                    {language === 'ar' ? 'فواتير التوصيل المنزلي' : 'Home Delivery Invoices'}
-                  </h2>
-                  <p className="text-sm text-secondary">
-                    {language === 'ar' ? `الإجمالي: ${filteredDeliveries.length} طلبات توصيل` : `Total: ${filteredDeliveries.length} deliveries`}
-                  </p>
-                </div>
-                {selectedDeliveryIds.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowBulkAssignModal(true)}
-                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-md shadow-blue-500/20"
+        {/* Common Filters Bar for Both Tabs */}
+        <div className="surface-card rounded-2xl border border-border p-4 shadow-sm mt-5">
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 flex-1">
+              {/* Branch Filter */}
+              <div>
+                <label className="block text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1">
+                  {language === 'ar' ? 'الفرع' : 'Branch'}
+                </label>
+                <div className="relative">
+                  <select
+                    value={branchFilter}
+                    onChange={(e) => setBranchFilter(e.target.value)}
+                    className="w-full appearance-none rounded-xl border border-border bg-surface py-2 px-3 text-primary text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400/40 cursor-pointer pr-8"
                   >
-                    {language === 'ar' ? 'تعيين جماعي للسائق' : 'Bulk Assign Driver'} ({selectedDeliveryIds.length})
-                  </button>
-                )}
+                    <option value="All">{language === 'ar' ? 'جميع الفروع' : 'All Branches'}</option>
+                    {branches && branches.map((b) => (
+                      <option key={b._id || b.id} value={b._id || b.id}>
+                        {b.name || b.branchName}
+                      </option>
+                    ))}
+                  </select>
+                  <FiChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-secondary w-3.5 h-3.5" />
+                </div>
               </div>
 
-              <div className="mt-5">
-                <ReusableTable columns={deliveryColumns} data={filteredDeliveries} onRowClick={handleViewDelivery} />
-              </div>
-            </section>
-          </>
-        ) : (
-          <>
-            {/* Search and Filter */}
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="relative">
-                <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary" />
-                <input
-                  type="text"
-                  placeholder="Search by request ID or address..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full rounded-3xl border border-border bg-surface py-3 pl-12 pr-4 text-primary placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-blue-400/40"
-                />
+              {/* From Date Filter */}
+              <div>
+                <label className="block text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1">
+                  {language === 'ar' ? 'من تاريخ' : 'From Date'}
+                </label>
+                <div className="relative">
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full rounded-xl border border-border bg-surface py-2 px-3 text-primary text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                  />
+                </div>
               </div>
 
-              <div className="relative">
-                <select
-                  value={pickupStatusFilter}
-                  onChange={(e) => setPickupStatusFilter(e.target.value)}
-                  className="w-full appearance-none rounded-3xl border border-border bg-surface py-3 px-4 text-primary focus:outline-none focus:ring-2 focus:ring-blue-400/40"
-                >
-                  <option value="All">All Pickup Status</option>
-                  {pickupStatuses.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-                <FiChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-secondary" />
+              {/* To Date Filter */}
+              <div>
+                <label className="block text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1">
+                  {language === 'ar' ? 'إلى تاريخ' : 'To Date'}
+                </label>
+                <div className="relative">
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full rounded-xl border border-border bg-surface py-2 px-3 text-primary text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                  />
+                </div>
+              </div>
+
+              {/* Status Filter (Context-aware for active tab) */}
+              <div>
+                <label className="block text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1">
+                  {language === 'ar' ? 'الحالة' : 'Status'}
+                </label>
+                <div className="relative">
+                  {activeTab === 'deliveries' ? (
+                    <select
+                      value={deliveryStatusFilter}
+                      onChange={(e) => setDeliveryStatusFilter(e.target.value)}
+                      className="w-full appearance-none rounded-xl border border-border bg-surface py-2 px-3 text-primary text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400/40 cursor-pointer pr-8"
+                    >
+                      <option value="All">{language === 'ar' ? 'جميع الحالات' : 'All Delivery Statuses'}</option>
+                      {deliveryStatuses.map((st) => (
+                        <option key={st} value={st}>
+                          {st}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <select
+                      value={pickupStatusFilter}
+                      onChange={(e) => setPickupStatusFilter(e.target.value)}
+                      className="w-full appearance-none rounded-xl border border-border bg-surface py-2 px-3 text-primary text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400/40 cursor-pointer pr-8"
+                    >
+                      <option value="All">{language === 'ar' ? 'جميع الحالات' : 'All Pickup Statuses'}</option>
+                      {pickupStatuses.map((st) => (
+                        <option key={st} value={st}>
+                          {st}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <FiChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-secondary w-3.5 h-3.5" />
+                </div>
               </div>
             </div>
 
-            {/* Pickups Section */}
-            <section>
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-semibold text-primary">Pickup Requests — {selectedCustomerObj.name}</h2>
-                  <p className="text-sm text-secondary">Total: {filteredPickups.length} pickups for this customer</p>
-                </div>
+            {/* Reset Filters Button */}
+            {hasActiveFilters && (
+              <div className="flex items-end self-end lg:self-center">
                 <button
-                  onClick={handlePrintManifest}
-                  disabled={selectedPickupIds.length === 0}
-                  className="action-button flex items-center justify-center gap-2 !w-auto !py-2 !px-4 text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Print Driver Manifest"
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-rose-500 hover:text-rose-600 border border-rose-500/20 hover:border-rose-500/40 hover:bg-rose-500/10 transition-colors whitespace-nowrap"
+                  title="Reset all filters"
                 >
-                  <span>Print Driver Manifest {selectedPickupIds.length > 0 ? `(${selectedPickupIds.length})` : ''}</span>
+                  <FiRotateCcw className="w-3.5 h-3.5" />
+                  <span>{language === 'ar' ? 'إعادة ضبط الفلاتر' : 'Reset Filters'}</span>
                 </button>
               </div>
+            )}
+          </div>
+        </div>
 
-              <div className="mt-5">
-                <ReusableTable columns={pickupColumns} data={filteredPickups} onRowClick={handleViewPickup} />
+        {/* Navigation Tabs: Home Delivery Invoices & Pickup Requests */}
+        <div className="flex items-center gap-3 border-b border-border pb-1 mt-6">
+          <button
+            type="button"
+            onClick={() => setActiveTab('deliveries')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold transition-all shadow-sm ${
+              activeTab === 'deliveries'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-500/20'
+                : 'bg-surface border border-border text-secondary hover:text-primary hover:bg-surface-alt'
+            }`}
+          >
+            <FiTruck className="w-4 h-4" />
+            <span>{language === 'ar' ? 'فواتير التوصيل المنزلي' : 'Home Delivery Invoices'}</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold ${
+                activeTab === 'deliveries' ? 'bg-white/20 text-white' : 'bg-surface-alt text-secondary'
+              }`}
+            >
+              {filteredDeliveries.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('pickups')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold transition-all shadow-sm ${
+              activeTab === 'pickups'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-500/20'
+                : 'bg-surface border border-border text-secondary hover:text-primary hover:bg-surface-alt'
+            }`}
+          >
+            <FiCalendar className="w-4 h-4" />
+            <span>{language === 'ar' ? 'طلبات الاستلام' : 'Pickup Requests'}</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold ${
+                activeTab === 'pickups' ? 'bg-white/20 text-white' : 'bg-surface-alt text-secondary'
+              }`}
+            >
+              {filteredPickups.length}
+            </span>
+          </button>
+        </div>
+
+        {/* Tab 1 Content: Home Delivery Invoices */}
+        {activeTab === 'deliveries' && (
+          <section className="mt-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-primary">
+                  {language === 'ar' ? 'فواتير التوصيل المنزلي' : 'Home Delivery Invoices'}
+                  {selectedCustomerObj ? ` — ${selectedCustomerObj.name}` : ''}
+                </h2>
+                <p className="text-sm text-secondary">
+                  {language === 'ar'
+                    ? `الإجمالي: ${filteredDeliveries.length} طلبات توصيل`
+                    : `Total: ${filteredDeliveries.length} deliveries`}
+                </p>
               </div>
-            </section>
+              {selectedDeliveryIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowBulkAssignModal(true)}
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-md shadow-blue-500/20"
+                >
+                  {language === 'ar' ? 'تعيين جماعي للسائق' : 'Bulk Assign Driver'} ({selectedDeliveryIds.length})
+                </button>
+              )}
+            </div>
 
-            {/* Deliveries Section */}
-            <section>
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-semibold text-primary">Deliveries — {selectedCustomerObj.name}</h2>
-                  <p className="text-sm text-secondary">Total: {filteredDeliveries.length} deliveries for this customer</p>
-                </div>
-                {selectedDeliveryIds.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowBulkAssignModal(true)}
-                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-md shadow-blue-500/20"
+            <div className="mt-5">
+              <ReusableTable columns={deliveryColumns} data={filteredDeliveries} onRowClick={handleViewDelivery} />
+            </div>
+          </section>
+        )}
+
+        {/* Tab 2 Content: Pickup Requests */}
+        {activeTab === 'pickups' && (
+          <section className="mt-4 space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-primary">
+                  {language === 'ar' ? 'طلبات الاستلام' : 'Pickup Requests'}
+                  {selectedCustomerObj ? ` — ${selectedCustomerObj.name}` : ''}
+                </h2>
+                <p className="text-sm text-secondary">
+                  {language === 'ar'
+                    ? `الإجمالي: ${filteredPickups.length} طلبات استلام`
+                    : `Total: ${filteredPickups.length} pickups`}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <div className="relative min-w-[170px]">
+                  <select
+                    value={pickupStatusFilter}
+                    onChange={(e) => setPickupStatusFilter(e.target.value)}
+                    className="w-full appearance-none rounded-xl border border-border bg-surface py-2 px-3 text-primary text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400/40 cursor-pointer pr-8"
                   >
-                    {language === 'ar' ? 'تعيين جماعي للسائق' : 'Bulk Assign Driver'} ({selectedDeliveryIds.length})
-                  </button>
-                )}
-              </div>
+                    <option value="All">{language === 'ar' ? 'جميع الحالات' : 'All Pickup Status'}</option>
+                    {pickupStatuses.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                  <FiChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-secondary w-3.5 h-3.5" />
+                </div>
 
-              <div className="mt-5">
-                <ReusableTable columns={deliveryColumns} data={filteredDeliveries} onRowClick={handleViewDelivery} />
+                <button
+                  type="button"
+                  onClick={handlePrintManifest}
+                  disabled={selectedPickupIds.length === 0}
+                  className="action-button flex items-center justify-center gap-2 !w-auto !py-2 !px-4 text-center disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap text-xs"
+                  title="Print Driver Manifest"
+                >
+                  <span>
+                    {language === 'ar' ? 'طباعة الكشف' : 'Print Driver Manifest'}{' '}
+                    {selectedPickupIds.length > 0 ? `(${selectedPickupIds.length})` : ''}
+                  </span>
+                </button>
               </div>
-            </section>
-          </>
+            </div>
+
+            <div className="mt-5">
+              <ReusableTable columns={pickupColumns} data={filteredPickups} onRowClick={handleViewPickup} />
+            </div>
+          </section>
         )}
       </div>
 
@@ -1796,6 +2258,11 @@ const PickupDelivery = () => {
                         {isHomeServices ? `${drv.driverName} (${drv.status} - ${drv.branch || 'No Branch'})` : `${drv.driverName} (${drv.status})`}
                       </option>
                     ))}
+                    {assignableDriversForEditPickup.length === 0 && (
+                      <option value="" disabled>
+                        {language === 'ar' ? 'لا يوجد سائقين متاحين لهذه المنطقة' : 'No drivers available for this area'}
+                      </option>
+                    )}
                   </select>
                   {editPickupData.assignedStaff && (() => {
                     const drv = drivers.find(d => d.driverName === editPickupData.assignedStaff);
@@ -1932,6 +2399,11 @@ const PickupDelivery = () => {
                         {isHomeServices ? `${drv.driverName} (${drv.status} - ${drv.branch || 'No Branch'})` : `${drv.driverName} (${drv.status})`}
                       </option>
                     ))}
+                    {assignableDriversForEditDelivery.length === 0 && (
+                      <option value="" disabled>
+                        {language === 'ar' ? 'لا يوجد سائقين متاحين لهذه المنطقة' : 'No drivers available for this area'}
+                      </option>
+                    )}
                   </select>
                   {editDeliveryData.assignedStaff && (() => {
                     const drv = drivers.find(d => d.driverName === editDeliveryData.assignedStaff);
@@ -2123,6 +2595,11 @@ const PickupDelivery = () => {
                       {isHomeServices ? `${drv.driverName} (${drv.status} - ${drv.branch || 'No Branch'})` : `${drv.driverName} (${drv.status})`}
                     </option>
                   ))}
+                  {assignableDriversForNewPickup.length === 0 && (
+                    <option value="" disabled>
+                      {language === 'ar' ? 'لا يوجد سائقين متاحين لهذه المنطقة' : 'No drivers available for this area'}
+                    </option>
+                  )}
                 </select>
                 {addPickupData.assignedStaff && (() => {
                   const drv = drivers.find(d => d.driverName === addPickupData.assignedStaff);
@@ -2235,6 +2712,11 @@ const PickupDelivery = () => {
                       {isHomeServices ? `${drv.driverName} (${drv.status} - ${drv.branch || 'No Branch'})` : `${drv.driverName} (${drv.status})`}
                     </option>
                   ))}
+                  {assignableDriversForNewDelivery.length === 0 && (
+                    <option value="" disabled>
+                      {language === 'ar' ? 'لا يوجد سائقين متاحين لهذه المنطقة' : 'No drivers available for this area'}
+                    </option>
+                  )}
                 </select>
                 {addDeliveryData.assignedStaff && (() => {
                   const drv = drivers.find(d => d.driverName === addDeliveryData.assignedStaff);
@@ -2387,6 +2869,19 @@ const PickupDelivery = () => {
         </div>,
         document.body
       )}
+
+      {/* Customer Form Modal from Customer Menu */}
+      <CustomerFormModal
+        isOpen={showAddCustomerModal}
+        onClose={() => setShowAddCustomerModal(false)}
+        initialQuery={customerSearchQuery}
+        onSuccess={(created) => {
+          if (created) {
+            handleSelectCustomer(created);
+          }
+          setShowAddCustomerModal(false);
+        }}
+      />
     </>
   );
 };

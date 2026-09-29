@@ -419,6 +419,154 @@ export const exportToPDF = ({ title, subtitle, columns, data, filename, summaryL
   return true;
 };
 
+export const generateSubscriberTwoPagePDF = (customers, branchName = 'All Branches') => {
+  if (!customers || customers.length === 0) return false;
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const subscribedList = customers.filter(c => c.isSubscriber);
+  const unsubscribedList = customers.filter(c => !c.isSubscriber);
+
+  const tableCols = [
+    { header: 'Customer ID', dataKey: 'customerId' },
+    { header: 'Customer Name', dataKey: 'name' },
+    { header: 'Phone', dataKey: 'phone' },
+    { header: 'Area', dataKey: 'area' },
+    { header: 'Status', dataKey: 'subscriptionStatus' },
+    { header: 'Total Orders', dataKey: 'totalOrders' },
+    { header: 'Total Spent', dataKey: 'totalSpentFormatted' },
+    { header: 'Balance Due', dataKey: 'balanceFormatted' },
+  ];
+
+  const formatRows = (list) => list.map(c => ({
+    customerId: c.customerId || (c.id ? `CUS-${c.id.toString().slice(-4).toUpperCase()}` : 'CUS-N/A'),
+    name: c.name || 'Unknown',
+    phone: c.phone || '—',
+    area: c.area || '—',
+    subscriptionStatus: c.isSubscriber ? 'Subscribed' : 'Unsubscribed',
+    totalOrders: c.totalOrders || 0,
+    totalSpentFormatted: formatCurrency(c.totalSpent || 0),
+    balanceFormatted: formatCurrency(c.balance || 0),
+  }));
+
+  // PAGE 1: Subscribed Customers
+  let y = 16;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.text(`Tuhama Laundry - Subscribed Customers Report (Page 1 of 2)`, 14, y);
+  y += 7;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(100);
+  doc.text(`Branch: ${branchName} | Total Subscribed: ${subscribedList.length} | Generated: ${formatDate(new Date())}`, 14, y);
+  y += 8;
+
+  autoTable(doc, {
+    startY: y,
+    head: [tableCols.map(c => c.header)],
+    body: formatRows(subscribedList).map(r => tableCols.map(c => r[c.dataKey])),
+    theme: 'grid',
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [217, 119, 6], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [254, 243, 199, 0.2] },
+    margin: { left: 14, right: 14 },
+  });
+
+  // PAGE 2: Unsubscribed Customers
+  doc.addPage();
+  y = 16;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.setTextColor(0);
+  doc.text(`Tuhama Laundry - Unsubscribed Customers Report (Page 2 of 2)`, 14, y);
+  y += 7;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(100);
+  doc.text(`Branch: ${branchName} | Total Unsubscribed: ${unsubscribedList.length} | Generated: ${formatDate(new Date())}`, 14, y);
+  y += 8;
+
+  autoTable(doc, {
+    startY: y,
+    head: [tableCols.map(c => c.header)],
+    body: formatRows(unsubscribedList).map(r => tableCols.map(c => r[c.dataKey])),
+    theme: 'grid',
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [71, 85, 105], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    margin: { left: 14, right: 14 },
+  });
+
+  doc.save(`subscriber-2page-report_${new Date().toISOString().slice(0, 10)}.pdf`);
+  return true;
+};
+
+export const generateDriverDailyReportPDF = (driverData, dateStr, branchName = 'All Branches') => {
+  if (!driverData || driverData.length === 0) return false;
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+  let y = 16;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.text(`Driver Daily Operations & Delivery Report`, 14, y);
+  y += 7;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(100);
+  doc.text(`Branch: ${branchName} | Date: ${dateStr || formatDate(new Date())} | Generated: ${formatDate(new Date())}`, 14, y);
+  y += 8;
+
+  const headers = [
+    'Driver Name', 'Branch', 'Date',
+    'Pickups Assigned', 'Pickups Completed', 'Pickups Pending',
+    'Deliveries Assigned', 'Deliveries Completed', 'Deliveries Pending',
+    'Total Tasks', 'Completed Tasks', 'Pending Tasks'
+  ];
+
+  const body = driverData.map(r => [
+    r.driverName,
+    r.branch,
+    r.date,
+    r.totalPickups,
+    r.pickupsCompleted,
+    r.pickupsPending,
+    r.totalDeliveries,
+    r.deliveriesCompleted,
+    r.deliveriesPending,
+    r.totalTasks,
+    r.completedTasks,
+    r.pendingTasks
+  ]);
+
+  autoTable(doc, {
+    startY: y,
+    head: [headers],
+    body: body,
+    theme: 'grid',
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    didParseCell: (data) => {
+      if (data.section === 'body') {
+        const isTotal = data.row.raw[0] === 'TOTAL';
+        if (isTotal) {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fillColor = [241, 245, 249];
+        }
+        if (data.column.index === 8 && Number(data.cell.raw) > 0) {
+          data.cell.styles.textColor = [225, 29, 72];
+          data.cell.styles.fontStyle = 'bold';
+        }
+      }
+    },
+    margin: { left: 14, right: 14 }
+  });
+
+  doc.save(`driver-daily-report_${new Date().toISOString().slice(0, 10)}.pdf`);
+  return true;
+};
+
+
 const translateService = (service) => {
   const s = String(service || 'Iron & Wash').trim();
   const lower = s.toLowerCase();
@@ -1286,36 +1434,7 @@ export const generateInvoicePDF = (order, { showPaidTotal = false } = {}) => {
               <span class="info-label">Delivery Type / نوع التوصيل:</span>
               <span class="info-value">${translatedDeliveryType.en} / <span style="direction: rtl;">${translatedDeliveryType.ar}</span></span>
             </div>
-            ${(() => {
-              const area = customerObj?.areaName || order?.areaName || '';
-              const part = customerObj?.partNo || order?.partNo || '';
-              const street = customerObj?.street || order?.street || '';
-              const jadda = customerObj?.jadda || order?.jadda || '';
-              const house = customerObj?.houseNo || order?.houseNo || '';
-              const level = customerObj?.levelNo || order?.levelNo || '';
-              const flat = customerObj?.flatNo || order?.flatNo || '';
-              const paci = customerObj?.paciNo || order?.paciNo || '';
-              const notes = customerObj?.addressNotes || order?.addressNotes || order?.address || '';
 
-              const parts = [];
-              if (area) parts.push(`Area: ${area}`);
-              if (part) parts.push(`Block: ${part}`);
-              if (street) parts.push(`S: ${street}`);
-              if (jadda) parts.push(`Jadah: ${jadda}`);
-              if (house) parts.push(`House: ${house}`);
-              if (level) parts.push(`F: ${level}`);
-              if (flat) parts.push(`Flat: ${flat}`);
-              if (paci) parts.push(`PACI: ${paci}`);
-              if (parts.length === 0 && notes) parts.push(notes);
-
-              if (parts.length === 0) return '';
-              return `
-                <div class="info-row" style="background-color: #f8fafc; border: 1px solid #cbd5e1; padding: 2px 4px; border-radius: 4px; margin: 2px 0;">
-                  <span class="info-label" style="font-weight: 800;">Address / العنوان:</span>
-                  <span class="info-value" style="font-weight: 700; font-size: 8.5px; line-height: 1.3;">${parts.join(' | ')}</span>
-                </div>
-              `;
-            })()}
             ${(order?.packaging === 'Folded' || order?.packaging === 'Fold') ? `
             <div class="info-row" style="background-color: #f3e8ff; border: 1.5px dashed #7e22ce; padding: 2px 4px; border-radius: 4px; margin: 3px 0; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
               <span class="info-label" style="color: #6b21a8 !important; font-weight: 800;">Packaging / التجهيز:</span>

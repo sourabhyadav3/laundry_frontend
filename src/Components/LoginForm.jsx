@@ -143,7 +143,8 @@ const LoginForm = () => {
       setIsLoading(false);
       const { token, refreshToken, user } = response.data;
 
-      const activeLoggedInBranch = user.branchId || selectedBranchId || 'All';
+      const isSuperAdmin = user.role === 'Super Admin';
+      const activeLoggedInBranch = isSuperAdmin ? 'All' : (user.branchId || selectedBranchId || 'All');
 
       // Save credentials to localStorage
       localStorage.setItem('token', token);
